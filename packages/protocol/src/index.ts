@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const opaqueId = z.string().min(1).max(200);
 const conversationId = z.string().min(1).max(1024);
+const responseId = z.string().min(1).max(100_000);
 const timestamp = z.iso.datetime({ offset: true });
 
 export const protocolVersion = z.literal("1");
@@ -88,7 +89,7 @@ export const interruptRunCommand = z.object({
 export const synthesizeResponseCommand = z.object({
   operationId: opaqueId,
   conversationId,
-  responseId: opaqueId,
+  responseId,
   voice: z.string().min(1).max(100).default("default"),
   format: z.enum(["audio/mpeg", "audio/wav", "audio/ogg"])
 });

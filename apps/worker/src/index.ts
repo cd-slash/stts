@@ -2,11 +2,13 @@ import {
   answerInputCommand,
   createConversationCommand,
   interruptRunCommand,
+  synthesizeResponseCommand,
   submitTurnCommand
 } from "@stts/protocol";
 import { Hono } from "hono";
 import { AgentAdapterError, createAgentAdapter } from "./agent";
 import { requireIdentity, type Bindings, type Variables } from "./auth";
+import { ResponseStateCodec } from "./response-state";
 import { createSpeechAdapter, SpeechAdapterError } from "./speech";
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -62,6 +64,52 @@ app.post("/api/transcriptions", async (context) => {
     return context.json(
       {
         code: "TRANSCRIPTION_FAILED",
+        message: adapterError.message,
+        retryable: adapterError.retryable
+      },
+      adapterError.status as 500
+    );
+  }
+});
+
+app.post("/api/speech/synthesis", async (context) => {
+  const parsed = synthesizeResponseCommand.safeParse(await context.req.json().catch(() => null));
+  if (!parsed.success) {
+    return context.json({ code: "INVALID_REQUEST", message: "Invalid synthesis", retryable: false }, 400);
+  }
+
+  let text: string;
+  try {
+    text = await new ResponseStateCodec(context.env).open(
+      parsed.data.responseId,
+      parsed.data.conversationId,
+      context.get("subject")
+    );
+  } catch {
+    return context.json(
+      { code: "RESPONSE_NOT_FOUND", message: "Response unavailable", retryable: false },
+      404
+    );
+  }
+
+  const formats = {
+    "audio/mpeg": "mp3",
+    "audio/wav": "wav",
+    "audio/ogg": "ogg"
+  } as const;
+  try {
+    return await createSpeechAdapter(context.env).synthesize(text, {
+      format: formats[parsed.data.format],
+      ...(parsed.data.voice === "default" ? {} : { voice: parsed.data.voice })
+    });
+  } catch (error) {
+    const adapterError =
+      error instanceof SpeechAdapterError
+        ? error
+        : new SpeechAdapterError("Synthesis unavailable", true);
+    return context.json(
+      {
+        code: "SYNTHESIS_FAILED",
         message: adapterError.message,
         retryable: adapterError.retryable
       },

@@ -9,6 +9,7 @@ import { ConversationStateCodec, type ConversationState } from "./conversation-s
 import { runHermesInputResponse, runHermesInterrupt, runHermesTurn } from "./hermes-client";
 import { HermesTransportError } from "./hermes-transport";
 import { runMockTurn } from "./mock-agent";
+import { ResponseStateCodec } from "./response-state";
 
 export interface ConversationHandle {
   conversationId: string;
@@ -134,9 +135,27 @@ class MockAgentAdapter implements AgentAdapter {
 
 class HermesAgentAdapter implements AgentAdapter {
   private readonly state: ConversationStateCodec;
+  private readonly responses: ResponseStateCodec;
 
   constructor(private readonly env: Bindings) {
     this.state = new ConversationStateCodec(env);
+    this.responses = new ResponseStateCodec(env);
+  }
+
+  private async bindResponses(
+    events: EventEnvelope[],
+    conversationId: string,
+    subject: string
+  ): Promise<void> {
+    await Promise.all(
+      events.map(async (event) => {
+        if (event.type !== "response.completed" || typeof event.data.text !== "string") return;
+        event.data = {
+          ...event.data,
+          responseId: await this.responses.seal(event.data.text, conversationId, subject)
+        };
+      })
+    );
   }
 
   async createConversation(profile: string, subject: string): Promise<ConversationHandle> {
@@ -159,15 +178,17 @@ class HermesAgentAdapter implements AgentAdapter {
       }
       const result = await runHermesTurn(this.env, state, command);
       const pending = pendingInput(result.events);
+      const conversationId = await this.state.seal(
+        {
+          profile: state.profile,
+          storedSessionId: result.storedSessionId,
+          ...(pending ? { pendingInput: pending } : {})
+        },
+        subject
+      );
+      await this.bindResponses(result.events, conversationId, subject);
       return {
-        conversationId: await this.state.seal(
-          {
-            profile: state.profile,
-            storedSessionId: result.storedSessionId,
-            ...(pending ? { pendingInput: pending } : {})
-          },
-          subject
-        ),
+        conversationId,
         events: result.events
       };
     } catch (error) {
@@ -209,15 +230,17 @@ class HermesAgentAdapter implements AgentAdapter {
         command
       );
       const nextPending = pendingInput(result.events);
+      const conversationId = await this.state.seal(
+        {
+          profile: state.profile,
+          storedSessionId: result.storedSessionId,
+          ...(nextPending ? { pendingInput: nextPending } : {})
+        },
+        subject
+      );
+      await this.bindResponses(result.events, conversationId, subject);
       return {
-        conversationId: await this.state.seal(
-          {
-            profile: state.profile,
-            storedSessionId: result.storedSessionId,
-            ...(nextPending ? { pendingInput: nextPending } : {})
-          },
-          subject
-        ),
+        conversationId,
         events: result.events
       };
     } catch (error) {

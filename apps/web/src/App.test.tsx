@@ -8,8 +8,9 @@ vi.mock("./api-client", () => ({
   transcribeVoiceNote: vi.fn(),
   submitTurn: vi.fn(),
   answerInput: vi.fn(),
+  playResponse: vi.fn(),
   speakLocal: vi.fn(),
-  stopLocalSpeech: vi.fn()
+  stopAudio: vi.fn()
 }));
 
 Object.defineProperty(window, "speechSynthesis", {

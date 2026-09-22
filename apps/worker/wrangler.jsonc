@@ -10,6 +10,7 @@
     "HERMES_BASE_URL": "https://hermes.cdslash.com",
     "HERMES_TIMEOUT_MS": "15000",
     "HERMES_TURN_TIMEOUT_MS": "110000",
+    "RESPONSE_TOKEN_TTL_SECONDS": "900",
     "SPEECH_BASE_URL": "https://speech.cdslash.com",
     "SPEECH_TIMEOUT_MS": "60000"
   }

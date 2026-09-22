@@ -133,7 +133,7 @@ The Worker validates the owner-bound conversation handle, resumes its durable He
 }
 ```
 
-The BFF resolves text by `responseId`. Clients do not send arbitrary text for privileged synthesis unless a future endpoint explicitly permits it.
+The BFF resolves text by `responseId`. Clients do not send arbitrary text for privileged synthesis. The current stateless implementation uses an AES-GCM token bound to the Access subject and current conversation handle, containing the completed response text and a short expiry. `POST /api/speech/synthesis` validates the token before calling Kokoro and streams only safe audio headers back to the client.
 
 ## Events
 

@@ -13,6 +13,7 @@ export interface Bindings {
   HERMES_TIMEOUT_MS?: string;
   HERMES_TURN_TIMEOUT_MS?: string;
   CONVERSATION_STATE_KEY?: string;
+  RESPONSE_TOKEN_TTL_SECONDS?: string;
   SPEECH_BASE_URL?: string;
   SPEECH_API_KEY?: string;
   SPEECH_TIMEOUT_MS?: string;

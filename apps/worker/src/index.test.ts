@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ResponseStateCodec } from "./response-state";
 import app from "./index";
 
 const env = {
@@ -8,6 +9,8 @@ const env = {
 };
 
 describe("worker API", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
   it("protects health routes in Access mode", async () => {
     const response = await app.request("/api/health", {}, { ...env, AUTH_MODE: "access" });
     expect(response.status).toBe(401);
@@ -136,5 +139,66 @@ describe("worker API", () => {
     await expect(response.json()).resolves.toMatchObject({
       events: [{ type: "run.interrupted", data: { runId: "run_1" } }]
     });
+  });
+
+  it("rejects unbound response synthesis", async () => {
+    const response = await app.request(
+      "/api/speech/synthesis",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operationId: "op_speech",
+          conversationId: "conv_1",
+          responseId: "invalid-response",
+          voice: "default",
+          format: "audio/mpeg"
+        })
+      },
+      { ...env, CONVERSATION_STATE_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({ code: "RESPONSE_NOT_FOUND" });
+  });
+
+  it("synthesizes only text recovered from a bound response ID", async () => {
+    const liveEnv = {
+      ...env,
+      SPEECH_MODE: "live" as const,
+      CONVERSATION_STATE_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      SPEECH_BASE_URL: "https://speech.example.com",
+      SPEECH_API_KEY: "synthetic-key"
+    };
+    const responseId = await new ResponseStateCodec(liveEnv).seal(
+      "Authoritative response",
+      "conv_1",
+      "local-owner"
+    );
+    const fetcher = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      expect(JSON.parse(String(init?.body))).toMatchObject({ input: "Authoritative response" });
+      return new Response("audio", { headers: { "content-type": "audio/mpeg" } });
+    });
+    vi.stubGlobal("fetch", fetcher);
+
+    const response = await app.request(
+      "/api/speech/synthesis",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operationId: "op_speech",
+          conversationId: "conv_1",
+          responseId,
+          voice: "default",
+          format: "audio/mpeg"
+        })
+      },
+      liveEnv
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("audio/mpeg");
+    expect(fetcher).toHaveBeenCalledOnce();
   });
 });

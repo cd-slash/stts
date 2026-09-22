@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import {
   answerInput,
   backendLabel,
+  playResponse,
   speakLocal,
-  stopLocalSpeech,
+  stopAudio,
   submitTurn,
   transcribeVoiceNote,
   type AgentResult,
@@ -18,6 +19,7 @@ interface Message {
   text: string;
   specialist?: string;
   activity?: string;
+  responseId?: string;
 }
 
 function formatDuration(seconds: number) {
@@ -66,7 +68,7 @@ export function App() {
     () => () => {
       recorderRef.current?.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
-      stopLocalSpeech();
+      stopAudio();
     },
     []
   );
@@ -90,7 +92,7 @@ export function App() {
     ]);
     setLastReply(result.text);
     setPhase("ready");
-    speakLocal(result.text);
+    void playResponse(result.text, result.responseId).catch(() => undefined);
   }
 
   async function processTurn(text: string) {
@@ -126,7 +128,7 @@ export function App() {
   }
 
   async function startRecording() {
-    stopLocalSpeech();
+    stopAudio();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
@@ -186,7 +188,11 @@ export function App() {
               <div className="message-meta">
                 <span>{message.role === "user" ? "You" : "Chief of Staff"}</span>
                 {message.role === "coordinator" && (
-                  <button type="button" className="replay" onClick={() => speakLocal(message.text)}>
+                  <button
+                    type="button"
+                    className="replay"
+                    onClick={() => void playResponse(message.text, message.responseId).catch(() => undefined)}
+                  >
                     <PlayIcon />
                     <span className="sr-only">Replay response</span>
                   </button>
@@ -270,7 +276,7 @@ export function App() {
             <span aria-hidden="true" />
           </button>
           {lastReply && (
-            <button type="button" className="stop-button" onClick={stopLocalSpeech}>
+            <button type="button" className="stop-button" onClick={stopAudio}>
               Stop audio
             </button>
           )}

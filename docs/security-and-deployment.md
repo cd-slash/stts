@@ -44,6 +44,7 @@ Current bindings:
 - `HERMES_TIMEOUT_MS`
 - `HERMES_TURN_TIMEOUT_MS`
 - `CONVERSATION_STATE_KEY` (secret; random 32-byte base64url key)
+- `RESPONSE_TOKEN_TTL_SECONDS` (60–3600; defaults to 900)
 - `SPEECH_BASE_URL`
 - `SPEECH_API_KEY` (secret)
 - `SPEECH_TIMEOUT_MS`
@@ -53,6 +54,8 @@ Current bindings:
 Hermes uses a host-specific Access service token to fetch the dashboard bootstrap and open its authenticated WebSocket. Never reuse that token for another Access app. The current speech gateway uses a fixed client bearer key. If either authentication contract changes, replace the adapter credentials without changing the browser protocol.
 
 Conversation handles are encrypted and authenticated with AES-GCM, bind to a truncated SHA-256 fingerprint of the Access subject, and carry the selected profile plus durable Hermes session ID. They are not storage or bearer authorization: every operation still requires a valid Access identity, and a handle fails validation for another subject. Rotate `CONVERSATION_STATE_KEY` only with an explicit plan to invalidate all outstanding handles.
+
+Completed-response IDs use the same key with separate authenticated context. They bind the final text to both Access subject and current conversation handle and expire after `RESPONSE_TOKEN_TTL_SECONDS`. This allows stateless TTS lookup without accepting arbitrary synthesis text or storing response audio.
 
 The Worker verifies the Access assertion's RS256 signature against the issuer JWKS and validates issuer, audience, expiry, activation time, and subject. Committed configuration defaults to Access authentication and live adapters; missing bindings fail closed. The local bypass is accepted only when an explicit ignored `.dev.vars` file sets `AUTH_MODE=local`.
 

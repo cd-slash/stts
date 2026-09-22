@@ -3,6 +3,7 @@ import { eventEnvelope } from "@stts/protocol";
 export interface CompletedReply {
   kind: "completed";
   text: string;
+  responseId?: string;
   specialist?: string;
   activity?: string;
 }
@@ -23,6 +24,10 @@ const wait = (milliseconds: number) =>
 const usesWorker = import.meta.env.VITE_BACKEND === "worker";
 export const backendLabel = usesWorker ? "Worker" : "Mock";
 let conversation: Promise<string> | undefined;
+let activeAudio: HTMLAudioElement | undefined;
+let activeAudioUrl: string | undefined;
+const audioCache = new Map<string, Blob>();
+const MAX_CACHED_AUDIO = 10;
 
 async function parseJson(response: Response): Promise<unknown> {
   const body = await response.json().catch(() => null);
@@ -85,7 +90,14 @@ function agentResult(body: unknown): AgentResult {
   if (!parsed.success) throw new Error("Invalid response");
   const completed = parsed.data.slice().reverse().find((event) => event.type === "response.completed");
   const responseText = completed?.data.text;
-  if (typeof responseText === "string") return { kind: "completed", text: responseText };
+  if (typeof responseText === "string") {
+    const responseId = completed?.data.responseId;
+    return {
+      kind: "completed",
+      text: responseText,
+      ...(typeof responseId === "string" ? { responseId } : {})
+    };
+  }
 
   const requested = parsed.data.slice().reverse().find((event) => event.type === "input.requested");
   const data = requested?.data;
@@ -165,4 +177,58 @@ export function speakLocal(text: string): void {
 
 export function stopLocalSpeech(): void {
   window.speechSynthesis.cancel();
+}
+
+export function stopAudio(): void {
+  stopLocalSpeech();
+  activeAudio?.pause();
+  activeAudio = undefined;
+  if (activeAudioUrl) URL.revokeObjectURL(activeAudioUrl);
+  activeAudioUrl = undefined;
+}
+
+export async function playResponse(text: string, responseId?: string): Promise<void> {
+  stopAudio();
+  if (!usesWorker || !responseId) {
+    speakLocal(text);
+    return;
+  }
+
+  let blob = audioCache.get(responseId);
+  if (!blob) {
+    const id = await conversationId();
+    const response = await fetch("/api/speech/synthesis", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        operationId: crypto.randomUUID(),
+        conversationId: id,
+        responseId,
+        voice: "default",
+        format: "audio/mpeg"
+      })
+    });
+    if (!response.ok) throw new Error("Synthesis failed");
+    blob = await response.blob();
+    audioCache.set(responseId, blob);
+    if (audioCache.size > MAX_CACHED_AUDIO) {
+      const oldest = audioCache.keys().next().value;
+      if (typeof oldest === "string") audioCache.delete(oldest);
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  activeAudioUrl = url;
+  activeAudio = audio;
+  const cleanup = () => {
+    URL.revokeObjectURL(url);
+    if (activeAudio === audio) {
+      activeAudio = undefined;
+      activeAudioUrl = undefined;
+    }
+  };
+  audio.addEventListener("ended", cleanup, { once: true });
+  audio.addEventListener("error", cleanup, { once: true });
+  await audio.play();
 }

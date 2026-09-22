@@ -49,7 +49,7 @@ Deliverables:
 - Ephemeral audio handling.
 - Speech latency and error instrumentation.
 
-Current progress: the upstream request/response contract, bearer isolation, bounded transcription parsing, sanitized failures, and safe synthesis response headers are implemented and covered by adapter tests. Response-ID lookup and client playback through the BFF remain outstanding.
+Current progress: the upstream request/response contract, bearer isolation, bounded transcription parsing, sanitized failures, and safe synthesis response headers are implemented and covered by adapter tests. Completed Hermes text receives an expiring, owner- and conversation-bound encrypted response ID; the PWA exchanges it for Kokoro audio only after completion and keeps a bounded in-memory audio cache for replay. Speech latency instrumentation and post-refresh audio regeneration remain outstanding.
 
 Exit criteria:
 
