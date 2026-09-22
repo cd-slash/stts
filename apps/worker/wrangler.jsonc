@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stts-bff",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-22",
+  "vars": {
+    "AUTH_MODE": "access"
+  }
+}
