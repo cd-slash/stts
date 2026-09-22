@@ -94,6 +94,14 @@ Only allowlisted context is accepted. Arbitrary browser or device state is not f
 
 Approval answers additionally require a server-issued confirmation nonce after read-back.
 
+HTTP mapping:
+
+```text
+POST /api/conversations/{conversationId}/inputs/{requestId}/answer
+```
+
+The Worker verifies that the request ID and input kind are bound into the owner-authenticated encrypted conversation handle. `approve` must include the exact one-time `confirmationNonce` emitted with the pending approval. Approval maps only to Hermes choice `once`; denial maps to `deny`. Clarification maps to `clarify.respond`. A successful response returns a replacement conversation handle with the pending input removed.
+
 ### Interrupt run
 
 ```json

@@ -209,6 +209,53 @@ summary:focus-visible {
   background: color-mix(in srgb, var(--paper) 95%, transparent);
 }
 
+.input-card {
+  margin-bottom: 0.8rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--reply);
+}
+
+.input-card h2 {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.input-card p {
+  margin: 0.45rem 0 0;
+  line-height: 1.4;
+}
+
+.input-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.input-actions button {
+  min-height: 2.75rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.input-actions .approve-action {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.input-actions button:disabled {
+  opacity: 0.42;
+}
+
 .transport-status {
   display: flex;
   justify-content: space-between;
@@ -319,7 +366,8 @@ summary:focus-visible {
 
 @media (hover: hover) and (pointer: fine) {
   .replay:hover,
-  .stop-button:hover {
+  .stop-button:hover,
+  .input-actions button:hover:not(:disabled) {
     background: color-mix(in srgb, var(--ink) 12%, transparent);
   }
 

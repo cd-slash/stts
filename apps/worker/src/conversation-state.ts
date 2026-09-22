@@ -5,11 +5,19 @@ interface StoredConversationState {
   u: string;
   p: string;
   s?: string;
+  r?: string;
+  k?: "approval" | "clarification";
+  n?: string;
 }
 
 export interface ConversationState {
   profile: string;
   storedSessionId?: string;
+  pendingInput?: {
+    requestId: string;
+    kind: "approval" | "clarification";
+    confirmationNonce?: string;
+  };
 }
 
 const encoder = new TextEncoder();
@@ -59,6 +67,18 @@ function parseState(value: unknown): StoredConversationState {
   ) {
     throw new Error("invalid conversation");
   }
+  const pendingFields = candidate.r !== undefined || candidate.k !== undefined || candidate.n !== undefined;
+  if (
+    pendingFields &&
+    (typeof candidate.r !== "string" ||
+      !candidate.r ||
+      (candidate.k !== "approval" && candidate.k !== "clarification") ||
+      (candidate.n !== undefined && (typeof candidate.n !== "string" || !candidate.n)) ||
+      (candidate.k === "approval" && !candidate.n) ||
+      (candidate.k === "clarification" && candidate.n !== undefined))
+  ) {
+    throw new Error("invalid conversation");
+  }
   return candidate as StoredConversationState;
 }
 
@@ -70,7 +90,14 @@ export class ConversationStateCodec {
       v: 1,
       u: await subjectFingerprint(subject),
       p: state.profile,
-      ...(state.storedSessionId ? { s: state.storedSessionId } : {})
+      ...(state.storedSessionId ? { s: state.storedSessionId } : {}),
+      ...(state.pendingInput
+        ? {
+            r: state.pendingInput.requestId,
+            k: state.pendingInput.kind,
+            ...(state.pendingInput.confirmationNonce ? { n: state.pendingInput.confirmationNonce } : {})
+          }
+        : {})
     };
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const encrypted = await crypto.subtle.encrypt(
@@ -104,6 +131,18 @@ export class ConversationStateCodec {
       throw new Error("invalid conversation");
     }
     if (state.u !== (await subjectFingerprint(subject))) throw new Error("invalid conversation");
-    return { profile: state.p, ...(state.s ? { storedSessionId: state.s } : {}) };
+    return {
+      profile: state.p,
+      ...(state.s ? { storedSessionId: state.s } : {}),
+      ...(state.r && state.k
+        ? {
+            pendingInput: {
+              requestId: state.r,
+              kind: state.k,
+              ...(state.n ? { confirmationNonce: state.n } : {})
+            }
+          }
+        : {})
+    };
   }
 }

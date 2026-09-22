@@ -1,4 +1,4 @@
-import { createConversationCommand, submitTurnCommand } from "@stts/protocol";
+import { answerInputCommand, createConversationCommand, submitTurnCommand } from "@stts/protocol";
 import { Hono } from "hono";
 import { AgentAdapterError, createAgentAdapter } from "./agent";
 import { requireIdentity, type Bindings, type Variables } from "./auth";
@@ -78,6 +78,35 @@ app.post("/api/conversations/:conversationId/turns", async (context) => {
 
   try {
     const result = await createAgentAdapter(context.env).submitTurn(
+      parsed.data,
+      context.get("subject")
+    );
+    return context.json({ ...result, adapter: context.env.AGENT_MODE }, 202);
+  } catch (error) {
+    const adapterError =
+      error instanceof AgentAdapterError
+        ? error
+        : new AgentAdapterError("Agent service unavailable", true);
+    return context.json(
+      { code: adapterError.code, message: adapterError.message, retryable: adapterError.retryable },
+      adapterError.status as 503
+    );
+  }
+});
+
+app.post("/api/conversations/:conversationId/inputs/:requestId/answer", async (context) => {
+  const body = await context.req.json().catch(() => null);
+  const parsed = answerInputCommand.safeParse({
+    ...(typeof body === "object" && body !== null ? body : {}),
+    conversationId: context.req.param("conversationId"),
+    requestId: context.req.param("requestId")
+  });
+  if (!parsed.success) {
+    return context.json({ code: "INVALID_REQUEST", message: "Invalid response", retryable: false }, 400);
+  }
+
+  try {
+    const result = await createAgentAdapter(context.env).answerInput(
       parsed.data,
       context.get("subject")
     );

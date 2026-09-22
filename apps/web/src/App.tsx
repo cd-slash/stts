@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { speakLocal, stopLocalSpeech, submitTurn, transcribeVoiceNote } from "./api-client";
+import {
+  answerInput,
+  backendLabel,
+  speakLocal,
+  stopLocalSpeech,
+  submitTurn,
+  transcribeVoiceNote,
+  type AgentResult,
+  type PendingInput
+} from "./api-client";
 
-type Phase = "idle" | "recording" | "transcribing" | "responding" | "ready" | "error";
+type Phase = "idle" | "recording" | "transcribing" | "responding" | "input" | "ready" | "error";
 
 interface Message {
   id: string;
@@ -21,6 +30,7 @@ function phaseLabel(phase: Phase) {
     recording: "Recording",
     transcribing: "Transcribing",
     responding: "Chief of Staff",
+    input: "Input required",
     ready: "Ready",
     error: "Voice unavailable"
   };
@@ -33,10 +43,14 @@ export function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [lastReply, setLastReply] = useState("");
+  const [pendingInput, setPendingInput] = useState<PendingInput | null>(null);
+  const [approvalArmed, setApprovalArmed] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const inputActionRef = useRef<HTMLButtonElement | null>(null);
+  const textEntryRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     if (phase !== "recording") return;
@@ -57,6 +71,28 @@ export function App() {
     []
   );
 
+  useEffect(() => {
+    if (pendingInput?.kind === "approval") inputActionRef.current?.focus();
+    if (pendingInput?.kind === "clarification") textEntryRef.current?.focus();
+  }, [pendingInput]);
+
+  function applyAgentResult(result: AgentResult) {
+    if (result.kind === "input") {
+      setPendingInput(result.input);
+      setApprovalArmed(false);
+      setPhase("input");
+      return;
+    }
+    setPendingInput(null);
+    setMessages((current) => [
+      ...current,
+      { id: crypto.randomUUID(), role: "coordinator", ...result }
+    ]);
+    setLastReply(result.text);
+    setPhase("ready");
+    speakLocal(result.text);
+  }
+
   async function processTurn(text: string) {
     const cleanText = text.trim();
     if (!cleanText) return;
@@ -70,13 +106,20 @@ export function App() {
 
     try {
       const reply = await submitTurn(cleanText);
-      setMessages((current) => [
-        ...current,
-        { id: crypto.randomUUID(), role: "coordinator", ...reply }
-      ]);
-      setLastReply(reply.text);
-      setPhase("ready");
-      speakLocal(reply.text);
+      applyAgentResult(reply);
+    } catch {
+      setPhase("error");
+    }
+  }
+
+  async function respondToInput(
+    answer: { kind: "text"; text: string } | { kind: "approve" | "deny"; confirmationNonce?: string }
+  ) {
+    if (!pendingInput) return;
+    setPhase("responding");
+    try {
+      const result = await answerInput(pendingInput, answer);
+      applyAgentResult(result);
     } catch {
       setPhase("error");
     }
@@ -125,9 +168,9 @@ export function App() {
           <h1>STTS</h1>
           <span className="profile">Chief of Staff</span>
         </div>
-        <div className="connection" aria-label="Local mock connected">
+        <div className="connection" aria-label={`${backendLabel} connected`}>
           <span aria-hidden="true" />
-          Mock
+          {backendLabel}
         </div>
       </header>
 
@@ -163,6 +206,53 @@ export function App() {
       </section>
 
       <section className="transport" aria-label="Voice controls">
+        {pendingInput?.kind === "approval" && (
+          <section className="input-card" aria-labelledby="approval-title">
+            <h2 id="approval-title">Approval</h2>
+            <p>{pendingInput.prompt}</p>
+            <div className="input-actions">
+              <button
+                ref={inputActionRef}
+                type="button"
+                onClick={() => {
+                  speakLocal(pendingInput.prompt);
+                  setApprovalArmed(true);
+                }}
+                disabled={busy}
+              >
+                Read back
+              </button>
+              {approvalArmed && (
+                <button
+                  type="button"
+                  className="approve-action"
+                  onClick={() =>
+                    void respondToInput({
+                      kind: "approve",
+                      confirmationNonce: pendingInput.confirmationNonce
+                    })
+                  }
+                  disabled={busy}
+                >
+                  Approve
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => void respondToInput({ kind: "deny" })}
+                disabled={busy}
+              >
+                Deny
+              </button>
+            </div>
+          </section>
+        )}
+        {pendingInput?.kind === "clarification" && (
+          <section className="input-card" aria-labelledby="clarification-title">
+            <h2 id="clarification-title">Clarification</h2>
+            <p>{pendingInput.prompt}</p>
+          </section>
+        )}
         <div className="transport-status" role="status">
           <span>{phaseLabel(phase)}</span>
           <span>{phase === "recording" ? formatDuration(seconds) : "Voice note"}</span>
@@ -173,7 +263,7 @@ export function App() {
             type="button"
             className={`record-button ${phase === "recording" ? "is-recording" : ""}`}
             onClick={phase === "recording" ? stopRecording : startRecording}
-            disabled={busy}
+            disabled={busy || pendingInput !== null}
             aria-label={phase === "recording" ? "Stop recording" : "Record voice note"}
             aria-pressed={phase === "recording"}
           >
@@ -190,21 +280,38 @@ export function App() {
           className="text-entry"
           onSubmit={(event) => {
             event.preventDefault();
-            void processTurn(draft);
+            if (pendingInput?.kind === "clarification") {
+              const answer = draft.trim();
+              if (!answer) return;
+              setMessages((current) => [
+                ...current,
+                { id: crypto.randomUUID(), role: "user", text: answer }
+              ]);
+              setDraft("");
+              void respondToInput({ kind: "text", text: answer });
+            } else {
+              void processTurn(draft);
+            }
           }}
         >
           <label className="sr-only" htmlFor="message">
             Message
           </label>
           <textarea
+            ref={textEntryRef}
             id="message"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="Message"
+            placeholder={pendingInput?.kind === "clarification" ? "Reply" : "Message"}
             rows={1}
-            disabled={busy || phase === "recording"}
+            disabled={busy || phase === "recording" || pendingInput?.kind === "approval"}
           />
-          <button type="submit" disabled={!draft.trim() || busy || phase === "recording"}>
+          <button
+            type="submit"
+            disabled={
+              !draft.trim() || busy || phase === "recording" || pendingInput?.kind === "approval"
+            }
+          >
             Send
           </button>
         </form>

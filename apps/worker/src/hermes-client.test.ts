@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { SubmitTurnCommand } from "@stts/protocol";
+import type { AnswerInputCommand, SubmitTurnCommand } from "@stts/protocol";
 import type { Bindings } from "./auth";
-import { runHermesTurn, type HermesSocketProvider } from "./hermes-client";
+import { runHermesInputResponse, runHermesTurn, type HermesSocketProvider } from "./hermes-client";
 
 class FakeHermesSocket extends EventTarget {
   readonly requests: Array<{ id: string; method: string; params: Record<string, unknown> }> = [];
@@ -42,6 +42,17 @@ class FakeHermesSocket extends EventTarget {
           session_id: sessionId,
           seq: ++this.sequence,
           payload: { text: "Hello there", status: "complete" }
+        });
+        return;
+      }
+      if (request.method === "approval.respond" || request.method === "clarify.respond") {
+        const sessionId = String(request.params.session_id);
+        this.reply(request.id, { resolved: 1, status: "ok" });
+        this.event({
+          type: "message.complete",
+          session_id: sessionId,
+          seq: ++this.sequence,
+          payload: { text: "Action complete", status: "complete" }
         });
       }
     });
@@ -119,5 +130,44 @@ describe("Hermes turn lifecycle", () => {
       params: { session_id: "stored-secret", profile: "default", defer_history: true }
     });
     expect(result.storedSessionId).toBe("stored-secret");
+  });
+
+  it("resumes and resolves a pending approval", async () => {
+    const socket = new FakeHermesSocket();
+    const provider: HermesSocketProvider = { connect: async () => socket as unknown as WebSocket };
+    const answer: AnswerInputCommand = {
+      operationId: "answer-operation",
+      conversationId: "opaque-conversation",
+      requestId: "approval-request",
+      answer: { kind: "approve", confirmationNonce: "nonce" }
+    };
+    const result = await runHermesInputResponse(
+      env,
+      {
+        profile: "default",
+        storedSessionId: "stored-secret",
+        pendingInput: {
+          requestId: "approval-request",
+          kind: "approval",
+          confirmationNonce: "nonce"
+        }
+      },
+      answer,
+      provider
+    );
+
+    expect(socket.requests.map((request) => request.method)).toEqual([
+      "session.resume",
+      "approval.respond"
+    ]);
+    expect(socket.requests[1]?.params).toMatchObject({
+      request_id: "approval-request",
+      choice: "once",
+      all: false
+    });
+    expect(result.events.map((event) => event.type)).toEqual([
+      "input.resolved",
+      "response.completed"
+    ]);
   });
 });

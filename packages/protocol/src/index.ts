@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const opaqueId = z.string().min(1).max(200);
+const conversationId = z.string().min(1).max(1024);
 const timestamp = z.iso.datetime({ offset: true });
 
 export const protocolVersion = z.literal("1");
@@ -36,7 +37,7 @@ export type EventType = z.infer<typeof eventType>;
 export const eventEnvelope = z.object({
   version: protocolVersion,
   eventId: opaqueId,
-  conversationId: opaqueId,
+  conversationId,
   cursor: opaqueId,
   occurredAt: timestamp,
   correlationId: opaqueId,
@@ -54,7 +55,7 @@ export const createConversationCommand = z.object({
 
 export const submitTurnCommand = z.object({
   operationId: opaqueId,
-  conversationId: opaqueId,
+  conversationId,
   input: z.object({
     kind: z.literal("text"),
     text: z.string().trim().min(1).max(50_000)
@@ -68,7 +69,7 @@ export const submitTurnCommand = z.object({
 
 export const answerInputCommand = z.object({
   operationId: opaqueId,
-  conversationId: opaqueId,
+  conversationId,
   requestId: opaqueId,
   answer: z.object({
     kind: z.enum(["text", "approve", "deny"]),
@@ -79,14 +80,14 @@ export const answerInputCommand = z.object({
 
 export const interruptRunCommand = z.object({
   operationId: opaqueId,
-  conversationId: opaqueId,
+  conversationId,
   runId: opaqueId,
   reason: z.enum(["user_cancelled", "user_redirect"])
 });
 
 export const synthesizeResponseCommand = z.object({
   operationId: opaqueId,
-  conversationId: opaqueId,
+  conversationId,
   responseId: opaqueId,
   voice: z.string().min(1).max(100).default("default"),
   format: z.enum(["audio/mpeg", "audio/wav", "audio/ogg"])

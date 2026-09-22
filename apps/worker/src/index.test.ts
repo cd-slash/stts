@@ -99,4 +99,25 @@ describe("worker API", () => {
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({ code: "UPSTREAM_UNAVAILABLE" });
   });
+
+  it("accepts normalized mock input responses", async () => {
+    const response = await app.request(
+      "/api/conversations/conv_1/inputs/request_1/answer",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operationId: "op_answer",
+          answer: { kind: "deny" }
+        })
+      },
+      env
+    );
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      conversationId: "conv_1",
+      events: [{ type: "input.resolved", data: { requestId: "request_1" } }]
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import type { EventEnvelope, SubmitTurnCommand } from "@stts/protocol";
+import type { AnswerInputCommand, EventEnvelope, SubmitTurnCommand } from "@stts/protocol";
 import type { Bindings } from "./auth";
 import type { ConversationState } from "./conversation-state";
 import {
@@ -25,6 +25,13 @@ interface SessionResult {
 export interface HermesTurnResult {
   events: EventEnvelope[];
   storedSessionId: string;
+}
+
+function turnTimeout(env: Bindings): number {
+  const configured = Number(env.HERMES_TURN_TIMEOUT_MS ?? "110000");
+  return Number.isInteger(configured) && configured >= 5_000 && configured <= 120_000
+    ? configured
+    : 110_000;
 }
 
 export interface HermesSocketProvider {
@@ -222,11 +229,7 @@ export async function runHermesTurn(
   provider: HermesSocketProvider = new HermesTransport(env)
 ): Promise<HermesTurnResult> {
   const socket = await provider.connect();
-  const configuredTimeout = Number(env.HERMES_TURN_TIMEOUT_MS ?? "110000");
-  const timeoutMs =
-    Number.isInteger(configuredTimeout) && configuredTimeout >= 5_000 && configuredTimeout <= 120_000
-      ? configuredTimeout
-      : 110_000;
+  const timeoutMs = turnTimeout(env);
   const client = new HermesRpcClient(socket, 15_000);
   let collector: ReturnType<HermesRpcClient["collectTurn"]> | undefined;
   try {
@@ -257,6 +260,80 @@ export async function runHermesTurn(
       surface: "voice-live"
     });
     return { events: await collector.promise, storedSessionId };
+  } catch (error) {
+    collector?.cancel();
+    throw error instanceof HermesTransportError
+      ? error
+      : new HermesTransportError("Agent service unavailable", true);
+  } finally {
+    client.close();
+  }
+}
+
+export async function runHermesInputResponse(
+  env: Bindings,
+  state: ConversationState & { storedSessionId: string },
+  command: AnswerInputCommand,
+  provider: HermesSocketProvider = new HermesTransport(env)
+): Promise<HermesTurnResult> {
+  const socket = await provider.connect();
+  const client = new HermesRpcClient(socket, 15_000);
+  let collector: ReturnType<HermesRpcClient["collectTurn"]> | undefined;
+  try {
+    await client.ready();
+    const session = sessionResult(
+      await client.call("session.resume", {
+        session_id: state.storedSessionId,
+        profile: state.profile,
+        defer_history: true
+      }),
+      false
+    );
+    collector = client.collectTurn(
+      session.session_id,
+      {
+        operationId: command.operationId,
+        conversationId: command.conversationId,
+        input: { kind: "text", text: command.answer.text || command.answer.kind },
+        profileOverride: null,
+        clientContext: { timezone: "UTC", locale: "en" }
+      },
+      turnTimeout(env)
+    );
+
+    const method = state.pendingInput?.kind === "approval" ? "approval.respond" : "clarify.respond";
+    const params =
+      method === "approval.respond"
+        ? {
+            session_id: session.session_id,
+            request_id: command.requestId,
+            choice: command.answer.kind === "approve" ? "once" : "deny",
+            all: false
+          }
+        : {
+            session_id: session.session_id,
+            request_id: command.requestId,
+            answer: command.answer.text ?? ""
+          };
+    const response = object(await client.call(method, params));
+    if (response.status === "expired") {
+      collector.cancel();
+      throw new HermesTransportError("Input request expired", false);
+    }
+
+    const events = await collector.promise;
+    events.unshift({
+      version: "1",
+      eventId: `event:${command.operationId}:input-resolved`,
+      conversationId: command.conversationId,
+      cursor: `operation-${command.operationId}-input-resolved`,
+      occurredAt: new Date().toISOString(),
+      correlationId: command.operationId,
+      type: "input.resolved",
+      critical: true,
+      data: { requestId: command.requestId }
+    });
+    return { events, storedSessionId: state.storedSessionId };
   } catch (error) {
     collector?.cancel();
     throw error instanceof HermesTransportError

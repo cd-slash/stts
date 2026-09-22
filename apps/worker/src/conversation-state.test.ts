@@ -47,6 +47,30 @@ describe("opaque conversation state", () => {
     await expect(codec.open(tampered, "owner-1")).rejects.toThrow("invalid conversation");
   });
 
+  it("binds a pending approval and confirmation nonce", async () => {
+    const codec = new ConversationStateCodec(env);
+    const token = await codec.seal(
+      {
+        profile: "default",
+        storedSessionId: "stored-session-id",
+        pendingInput: {
+          requestId: "approval-request-id",
+          kind: "approval",
+          confirmationNonce: "confirmation-nonce"
+        }
+      },
+      "owner-1"
+    );
+    expect(token.length).toBeLessThanOrEqual(1024);
+    await expect(codec.open(token, "owner-1")).resolves.toMatchObject({
+      pendingInput: {
+        requestId: "approval-request-id",
+        kind: "approval",
+        confirmationNonce: "confirmation-nonce"
+      }
+    });
+  });
+
   it("fails closed without a 256-bit key", async () => {
     const codec = new ConversationStateCodec({ ...env, CONVERSATION_STATE_KEY: "short" });
     await expect(codec.seal({ profile: "default" }, "owner-1")).rejects.toThrow(
