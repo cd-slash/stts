@@ -26,7 +26,29 @@ const wait = (milliseconds: number) =>
 
 const usesWorker = import.meta.env.VITE_BACKEND === "worker";
 export const backendLabel = usesWorker ? "Worker" : "Mock";
-let conversation: Promise<string> | undefined;
+const conversationStorageKey = "stts.conversation.v1";
+
+function restoredConversation(): string | undefined {
+  if (!usesWorker) return undefined;
+  try {
+    const value = window.localStorage.getItem(conversationStorageKey);
+    return value || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function retainConversation(value: string): void {
+  conversation = Promise.resolve(value);
+  try {
+    window.localStorage.setItem(conversationStorageKey, value);
+  } catch {
+    // In-memory continuation remains available when storage is blocked.
+  }
+}
+
+const restored = restoredConversation();
+let conversation: Promise<string> | undefined = restored ? Promise.resolve(restored) : undefined;
 let activeAudio: HTMLAudioElement | undefined;
 let activeAudioUrl: string | undefined;
 const audioCache = new Map<string, Blob>();
@@ -55,6 +77,7 @@ async function conversationId(): Promise<string> {
         }
         const id = body.conversationId;
         if (typeof id !== "string" || !id) throw new Error("Invalid response");
+        retainConversation(id);
         return id;
       })
       .catch((error: unknown) => {
@@ -90,7 +113,7 @@ function agentResult(body: unknown): AgentResult {
   if (!("conversationId" in body) || typeof body.conversationId !== "string") {
     throw new Error("Invalid response");
   }
-  conversation = Promise.resolve(body.conversationId);
+  retainConversation(body.conversationId);
   hasDurableConversation = true;
   const parsed = eventEnvelope.array().safeParse(body.events);
   if (!parsed.success) throw new Error("Invalid response");
@@ -185,7 +208,7 @@ export async function interruptActiveTurn(): Promise<boolean> {
     throw new Error("Invalid response");
   }
   if (typeof body.conversationId !== "string") throw new Error("Invalid response");
-  conversation = Promise.resolve(body.conversationId);
+  retainConversation(body.conversationId);
   turn.controller.abort();
   if (activeTurn?.runId === turn.runId) activeTurn = undefined;
   return true;

@@ -85,6 +85,7 @@ This distinction prevents UI code from silently acquiring agent policy and permi
 | Data | Initial authority | Retention |
 |---|---|---|
 | Conversation text and agent events | Hermes | Hermes policy |
+| Opaque conversation continuation handle | PWA local storage | Until site data is cleared or handle is replaced |
 | Agent execution and tool state | Hermes | Hermes policy |
 | Source recording | Browser/Worker request | Ephemeral |
 | Synthesized audio | Browser/Worker response | Ephemeral; regenerable |
