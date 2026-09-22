@@ -7,6 +7,8 @@
     "AUTH_MODE": "access",
     "SPEECH_MODE": "live",
     "AGENT_MODE": "hermes",
+    "HERMES_BASE_URL": "https://hermes.cdslash.com",
+    "HERMES_TIMEOUT_MS": "15000",
     "SPEECH_BASE_URL": "https://speech.cdslash.com",
     "SPEECH_TIMEOUT_MS": "60000"
   }

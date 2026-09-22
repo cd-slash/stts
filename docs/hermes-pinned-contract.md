@@ -95,16 +95,24 @@ The adapter must:
 5. Reset sequence watermarks when the replay epoch changes.
 6. Rebuild from durable session history if Hermes reports truncated replay.
 
-## Authentication constraint
+## Authentication
 
 Hermes dashboard authentication has two distinct modes:
 
 - loopback/insecure mode uses a session token query parameter;
 - gated mode mints a fresh single-use WebSocket ticket through `/api/auth/ws-ticket` and rejects the legacy token path.
 
-The production BFF must not assume that a dashboard session token works through the Access-gated hostname. Before implementing the live relay, verify or provision a machine-to-machine path that can both pass Cloudflare Access and obtain an accepted Hermes WebSocket credential. Until that is proven, committed `AGENT_MODE=hermes` fails closed.
+Live verification on 2026-09-22 established the machine path without changing Hermes:
 
-The separate Hermes OpenAI-compatible API is not a substitute for this gateway contract because it does not preserve the same replay, clarification, approval, and interruption semantics.
+1. A host-specific Cloudflare Access service token reaches `hermes.cdslash.com` using the `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers.
+2. `GET /api/status` reported Hermes `0.21.2`, gateway state `running`, and `auth_required: false`.
+3. `GET /` returned the injected loopback session token.
+4. An upgrade to `/api/ws?token=<injected token>` with the same Access headers received `gateway.ready`, including a replay epoch.
+5. `gateway.ping` succeeded.
+
+The diagnostic policies and tokens used for verification were deleted immediately afterward. Production must use a separately named, host-specific service token stored only as Worker secrets. The Worker transport now implements the bounded bootstrap and authenticated upgrade sequence, but `AGENT_MODE=hermes` remains fail-closed until the conversation lifecycle preserves durable create/resume semantics.
+
+The planned `hermes-origin.cdslash.com` Access gate accepted a diagnostic service token, but its origin returned HTTP 502 during verification. It is not currently a usable transport path. The separate Hermes OpenAI-compatible API is also not a substitute for this gateway contract because it does not preserve the same replay, clarification, approval, and interruption semantics.
 
 ## Compatibility policy
 

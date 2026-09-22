@@ -8,6 +8,9 @@ export interface Bindings {
   ACCESS_AUD?: string;
   ACCESS_ISSUER?: string;
   HERMES_BASE_URL?: string;
+  HERMES_ACCESS_CLIENT_ID?: string;
+  HERMES_ACCESS_CLIENT_SECRET?: string;
+  HERMES_TIMEOUT_MS?: string;
   SPEECH_BASE_URL?: string;
   SPEECH_API_KEY?: string;
   SPEECH_TIMEOUT_MS?: string;
