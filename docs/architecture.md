@@ -72,6 +72,8 @@ Speech remains app-owned rather than Hermes-owned. This lets another agent stack
 
 Hermes remains authoritative for sessions, text transcript, coordinator reasoning, specialist routing, tools, approvals, and agent interruption.
 
+The verified deployed wire contract and its unresolved machine-authentication constraint are recorded in [Hermes pinned gateway contract](hermes-pinned-contract.md).
+
 ## Coordinator boundary
 
 The app does not implement coordinator reasoning. Chief of Staff owns delegation and composes the user-facing answer. The app's deterministic controller only manages capture, transport, audio playback, state transitions, and safety confirmation.

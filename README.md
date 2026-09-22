@@ -37,6 +37,7 @@ CarPlay is a later native iOS client using the same BFF and application protocol
 - [Architecture](docs/architecture.md)
 - [Communication flow](docs/communication-flow.md)
 - [Agent adapter protocol](docs/agent-adapter-protocol.md)
+- [Hermes pinned contract](docs/hermes-pinned-contract.md)
 - [Security and deployment](docs/security-and-deployment.md)
 - [Roadmap](docs/roadmap.md)
 - [Architecture decision record](docs/decisions/0001-worker-bff.md)

@@ -66,6 +66,8 @@ Deliverables:
 - Chief of Staff default and verified profile mappings.
 - Compatibility tests for gateway upgrades.
 
+Current progress: the exact RPC methods, event shapes, replay semantics, and deployed source commit are documented. A tested pure normalizer maps core message, tool, specialist, clarification, approval, and error events while excluding internal reasoning. The live relay remains blocked on proving a machine-to-machine WebSocket authentication path for the gated dashboard.
+
 Exit criteria:
 
 - A real Chief of Staff conversation survives page refresh and stream reconnection.
