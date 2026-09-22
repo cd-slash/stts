@@ -1,7 +1,12 @@
-import type { AnswerInputCommand, EventEnvelope, SubmitTurnCommand } from "@stts/protocol";
+import type {
+  AnswerInputCommand,
+  EventEnvelope,
+  InterruptRunCommand,
+  SubmitTurnCommand
+} from "@stts/protocol";
 import type { Bindings } from "./auth";
 import { ConversationStateCodec, type ConversationState } from "./conversation-state";
-import { runHermesInputResponse, runHermesTurn } from "./hermes-client";
+import { runHermesInputResponse, runHermesInterrupt, runHermesTurn } from "./hermes-client";
 import { HermesTransportError } from "./hermes-transport";
 import { runMockTurn } from "./mock-agent";
 
@@ -19,6 +24,7 @@ export interface AgentAdapter {
   createConversation(profile: string, subject: string): Promise<ConversationHandle>;
   submitTurn(command: SubmitTurnCommand, subject: string): Promise<TurnResult>;
   answerInput(command: AnswerInputCommand, subject: string): Promise<TurnResult>;
+  interrupt(command: InterruptRunCommand, subject: string): Promise<TurnResult>;
 }
 
 export class AgentAdapterError extends Error {
@@ -101,6 +107,25 @@ class MockAgentAdapter implements AgentAdapter {
           type: "input.resolved",
           critical: true,
           data: { requestId: command.requestId }
+        }
+      ]
+    };
+  }
+
+  async interrupt(command: InterruptRunCommand): Promise<TurnResult> {
+    return {
+      conversationId: command.conversationId,
+      events: [
+        {
+          version: "1",
+          eventId: `event:${command.operationId}:run.interrupted`,
+          conversationId: command.conversationId,
+          cursor: `operation-${command.operationId}`,
+          occurredAt: new Date().toISOString(),
+          correlationId: command.operationId,
+          type: "run.interrupted",
+          critical: true,
+          data: { runId: command.runId, reason: command.reason }
         }
       ]
     };
@@ -204,6 +229,33 @@ class HermesAgentAdapter implements AgentAdapter {
         if (error.message === "Input request expired") {
           throw new AgentAdapterError(error.message, false, 409, "INPUT_EXPIRED");
         }
+        throw new AgentAdapterError(error.message, error.retryable);
+      }
+      throw new AgentAdapterError("Agent service unavailable", true);
+    }
+  }
+
+  async interrupt(command: InterruptRunCommand, subject: string): Promise<TurnResult> {
+    try {
+      const state = await this.state.open(command.conversationId, subject);
+      if (!state.storedSessionId) {
+        throw new AgentAdapterError("Run unavailable", false, 409, "RUN_NOT_FOUND");
+      }
+      const result = await runHermesInterrupt(
+        this.env,
+        { ...state, storedSessionId: state.storedSessionId },
+        command
+      );
+      return {
+        conversationId: await this.state.seal(state, subject),
+        events: result.events
+      };
+    } catch (error) {
+      if (error instanceof AgentAdapterError) throw error;
+      if (error instanceof Error && error.message === "invalid conversation") {
+        throw new AgentAdapterError("Invalid conversation", false, 400, "INVALID_REQUEST");
+      }
+      if (error instanceof HermesTransportError) {
         throw new AgentAdapterError(error.message, error.retryable);
       }
       throw new AgentAdapterError("Agent service unavailable", true);

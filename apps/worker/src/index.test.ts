@@ -120,4 +120,21 @@ describe("worker API", () => {
       events: [{ type: "input.resolved", data: { requestId: "request_1" } }]
     });
   });
+
+  it("accepts normalized mock interruptions", async () => {
+    const response = await app.request(
+      "/api/conversations/conv_1/runs/run_1/interrupt",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ operationId: "op_interrupt", reason: "user_redirect" })
+      },
+      env
+    );
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      events: [{ type: "run.interrupted", data: { runId: "run_1" } }]
+    });
+  });
 });

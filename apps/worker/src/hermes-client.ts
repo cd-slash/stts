@@ -1,4 +1,9 @@
-import type { AnswerInputCommand, EventEnvelope, SubmitTurnCommand } from "@stts/protocol";
+import type {
+  AnswerInputCommand,
+  EventEnvelope,
+  InterruptRunCommand,
+  SubmitTurnCommand
+} from "@stts/protocol";
 import type { Bindings } from "./auth";
 import type { ConversationState } from "./conversation-state";
 import {
@@ -23,6 +28,11 @@ interface SessionResult {
 }
 
 export interface HermesTurnResult {
+  events: EventEnvelope[];
+  storedSessionId: string;
+}
+
+export interface HermesInterruptResult {
   events: EventEnvelope[];
   storedSessionId: string;
 }
@@ -336,6 +346,51 @@ export async function runHermesInputResponse(
     return { events, storedSessionId: state.storedSessionId };
   } catch (error) {
     collector?.cancel();
+    throw error instanceof HermesTransportError
+      ? error
+      : new HermesTransportError("Agent service unavailable", true);
+  } finally {
+    client.close();
+  }
+}
+
+export async function runHermesInterrupt(
+  env: Bindings,
+  state: ConversationState & { storedSessionId: string },
+  command: InterruptRunCommand,
+  provider: HermesSocketProvider = new HermesTransport(env)
+): Promise<HermesInterruptResult> {
+  const socket = await provider.connect();
+  const client = new HermesRpcClient(socket, 15_000);
+  const event = (type: "run.interrupting" | "run.interrupted" | "run.interrupt_failed") => ({
+    version: "1" as const,
+    eventId: `event:${command.operationId}:${type}`,
+    conversationId: command.conversationId,
+    cursor: `operation-${command.operationId}-${type}`,
+    occurredAt: new Date().toISOString(),
+    correlationId: command.operationId,
+    type,
+    critical: true,
+    data: { runId: command.runId, reason: command.reason }
+  });
+  const events: EventEnvelope[] = [event("run.interrupting")];
+  try {
+    await client.ready();
+    const session = sessionResult(
+      await client.call("session.resume", {
+        session_id: state.storedSessionId,
+        profile: state.profile,
+        defer_history: true
+      }),
+      false
+    );
+    const result = object(
+      await client.call("session.interrupt", { session_id: session.session_id })
+    );
+    const interrupted = result.interrupted !== false && result.status !== "not_interrupted";
+    events.push(event(interrupted ? "run.interrupted" : "run.interrupt_failed"));
+    return { events, storedSessionId: state.storedSessionId };
+  } catch (error) {
     throw error instanceof HermesTransportError
       ? error
       : new HermesTransportError("Agent service unavailable", true);

@@ -116,6 +116,8 @@ The application conversation handle is AES-GCM authenticated state containing th
 
 When Hermes pauses for approval or clarification, the handle also binds the pending request ID and kind. Approval handles carry a random one-time confirmation nonce that is emitted with `input.requested`; `approve` is rejected unless the response returns that nonce. The adapter resumes the durable session before sending `approval.respond` or `clarify.respond`, then clears pending state in the replacement handle.
 
+Interruption follows the same resume-first rule: the Worker opens the owner-bound handle, resumes the durable session to obtain its current runtime ID, then calls `session.interrupt`. The normalized response does not expose either Hermes identifier.
+
 The planned `hermes-origin.cdslash.com` Access gate accepted a diagnostic service token, but its origin returned HTTP 502 during verification. It is not currently a usable transport path. The separate Hermes OpenAI-compatible API is also not a substitute for this gateway contract because it does not preserve the same replay, clarification, approval, and interruption semantics.
 
 ## Compatibility policy

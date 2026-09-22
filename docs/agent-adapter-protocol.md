@@ -113,6 +113,14 @@ The Worker verifies that the request ID and input kind are bound into the owner-
 }
 ```
 
+HTTP mapping:
+
+```text
+POST /api/conversations/{conversationId}/runs/{runId}/interrupt
+```
+
+The Worker validates the owner-bound conversation handle, resumes its durable Hermes session, and calls `session.interrupt` with the current runtime session ID. The response contains `run.interrupting` followed by either `run.interrupted` or `run.interrupt_failed`; upstream session IDs remain excluded.
+
 ### Synthesize response
 
 ```json

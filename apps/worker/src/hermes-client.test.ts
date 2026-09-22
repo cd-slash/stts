@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { AnswerInputCommand, SubmitTurnCommand } from "@stts/protocol";
+import type { AnswerInputCommand, InterruptRunCommand, SubmitTurnCommand } from "@stts/protocol";
 import type { Bindings } from "./auth";
-import { runHermesInputResponse, runHermesTurn, type HermesSocketProvider } from "./hermes-client";
+import {
+  runHermesInputResponse,
+  runHermesInterrupt,
+  runHermesTurn,
+  type HermesSocketProvider
+} from "./hermes-client";
 
 class FakeHermesSocket extends EventTarget {
   readonly requests: Array<{ id: string; method: string; params: Record<string, unknown> }> = [];
@@ -54,6 +59,10 @@ class FakeHermesSocket extends EventTarget {
           seq: ++this.sequence,
           payload: { text: "Action complete", status: "complete" }
         });
+        return;
+      }
+      if (request.method === "session.interrupt") {
+        this.reply(request.id, { status: "interrupted", interrupted: true });
       }
     });
   }
@@ -168,6 +177,32 @@ describe("Hermes turn lifecycle", () => {
     expect(result.events.map((event) => event.type)).toEqual([
       "input.resolved",
       "response.completed"
+    ]);
+  });
+
+  it("resumes and interrupts an active run", async () => {
+    const socket = new FakeHermesSocket();
+    const provider: HermesSocketProvider = { connect: async () => socket as unknown as WebSocket };
+    const interrupt: InterruptRunCommand = {
+      operationId: "interrupt-operation",
+      conversationId: "opaque-conversation",
+      runId: "run-1",
+      reason: "user_redirect"
+    };
+    const result = await runHermesInterrupt(
+      env,
+      { profile: "default", storedSessionId: "stored-secret" },
+      interrupt,
+      provider
+    );
+
+    expect(socket.requests.map((request) => request.method)).toEqual([
+      "session.resume",
+      "session.interrupt"
+    ]);
+    expect(result.events.map((event) => event.type)).toEqual([
+      "run.interrupting",
+      "run.interrupted"
     ]);
   });
 });
