@@ -16,7 +16,10 @@ export interface PendingInput {
   confirmationNonce?: string;
 }
 
-export type AgentResult = CompletedReply | { kind: "input"; input: PendingInput };
+export type AgentResult =
+  | CompletedReply
+  | { kind: "input"; input: PendingInput }
+  | { kind: "interrupted" };
 
 const wait = (milliseconds: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
@@ -28,6 +31,8 @@ let activeAudio: HTMLAudioElement | undefined;
 let activeAudioUrl: string | undefined;
 const audioCache = new Map<string, Blob>();
 const MAX_CACHED_AUDIO = 10;
+let hasDurableConversation = false;
+let activeTurn: { runId: string; controller: AbortController } | undefined;
 
 async function parseJson(response: Response): Promise<unknown> {
   const body = await response.json().catch(() => null);
@@ -86,6 +91,7 @@ function agentResult(body: unknown): AgentResult {
     throw new Error("Invalid response");
   }
   conversation = Promise.resolve(body.conversationId);
+  hasDurableConversation = true;
   const parsed = eventEnvelope.array().safeParse(body.events);
   if (!parsed.success) throw new Error("Invalid response");
   const completed = parsed.data.slice().reverse().find((event) => event.type === "response.completed");
@@ -124,22 +130,33 @@ function agentResult(body: unknown): AgentResult {
 
 export async function submitTurn(text: string): Promise<AgentResult> {
   if (usesWorker) {
-    const id = await conversationId();
-    const body = await fetch(`/api/conversations/${encodeURIComponent(id)}/turns`, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        operationId: crypto.randomUUID(),
-        input: { kind: "text", text },
-        profileOverride: null,
-        clientContext: {
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          locale: navigator.language
-        }
-      })
-    }).then(parseJson);
-    return agentResult(body);
+    const runId = crypto.randomUUID();
+    const controller = new AbortController();
+    activeTurn = { runId, controller };
+    try {
+      const id = await conversationId();
+      const body = await fetch(`/api/conversations/${encodeURIComponent(id)}/turns`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          operationId: runId,
+          input: { kind: "text", text },
+          profileOverride: null,
+          clientContext: {
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            locale: navigator.language
+          }
+        })
+      }).then(parseJson);
+      return agentResult(body);
+    } catch (error) {
+      if (controller.signal.aborted) return { kind: "interrupted" };
+      throw error;
+    } finally {
+      if (activeTurn?.runId === runId) activeTurn = undefined;
+    }
   }
 
   await wait(900);
@@ -149,6 +166,29 @@ export async function submitTurn(text: string): Promise<AgentResult> {
     specialist: "Personal Assistant",
     activity: "Priority review complete"
   };
+}
+
+export async function interruptActiveTurn(): Promise<boolean> {
+  if (!usesWorker || !hasDurableConversation || !activeTurn) return false;
+  const turn = activeTurn;
+  const id = await conversationId();
+  const body = await fetch(
+    `/api/conversations/${encodeURIComponent(id)}/runs/${encodeURIComponent(turn.runId)}/interrupt`,
+    {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operationId: crypto.randomUUID(), reason: "user_cancelled" })
+    }
+  ).then(parseJson);
+  if (!body || typeof body !== "object" || !("conversationId" in body)) {
+    throw new Error("Invalid response");
+  }
+  if (typeof body.conversationId !== "string") throw new Error("Invalid response");
+  conversation = Promise.resolve(body.conversationId);
+  turn.controller.abort();
+  if (activeTurn?.runId === turn.runId) activeTurn = undefined;
+  return true;
 }
 
 export async function answerInput(

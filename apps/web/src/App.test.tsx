@@ -4,10 +4,11 @@ import * as api from "./api-client";
 import { App } from "./App";
 
 vi.mock("./api-client", () => ({
-  backendLabel: "Mock",
+  backendLabel: "Worker",
   transcribeVoiceNote: vi.fn(),
   submitTurn: vi.fn(),
   answerInput: vi.fn(),
+  interruptActiveTurn: vi.fn(),
   playResponse: vi.fn(),
   speakLocal: vi.fn(),
   stopAudio: vi.fn()
@@ -19,7 +20,7 @@ Object.defineProperty(window, "speechSynthesis", {
 });
 
 describe("App", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => vi.resetAllMocks());
   afterEach(cleanup);
 
   it("presents voice-first controls and a text fallback", () => {
@@ -61,5 +62,23 @@ describe("App", () => {
         { kind: "approve", confirmationNonce: "nonce-1" }
       )
     );
+  });
+
+  it("offers interruption after a durable turn", async () => {
+    vi.mocked(api.submitTurn)
+      .mockResolvedValueOnce({ kind: "completed", text: "First response" })
+      .mockImplementationOnce(() => new Promise(() => undefined));
+    vi.mocked(api.interruptActiveTurn).mockResolvedValue(true);
+    render(<App />);
+
+    const field = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(field, { target: { value: "First" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText("First response")).toBeInTheDocument();
+
+    fireEvent.change(field, { target: { value: "Second" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Stop work" }));
+    await waitFor(() => expect(api.interruptActiveTurn).toHaveBeenCalledOnce());
   });
 });

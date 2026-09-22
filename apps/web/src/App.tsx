@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   answerInput,
   backendLabel,
+  interruptActiveTurn,
   playResponse,
   speakLocal,
   stopAudio,
@@ -47,6 +48,7 @@ export function App() {
   const [lastReply, setLastReply] = useState("");
   const [pendingInput, setPendingInput] = useState<PendingInput | null>(null);
   const [approvalArmed, setApprovalArmed] = useState(false);
+  const [canInterrupt, setCanInterrupt] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -79,13 +81,19 @@ export function App() {
   }, [pendingInput]);
 
   function applyAgentResult(result: AgentResult) {
+    if (result.kind === "interrupted") {
+      setPhase("ready");
+      return;
+    }
     if (result.kind === "input") {
+      if (backendLabel === "Worker") setCanInterrupt(true);
       setPendingInput(result.input);
       setApprovalArmed(false);
       setPhase("input");
       return;
     }
     setPendingInput(null);
+    if (backendLabel === "Worker") setCanInterrupt(true);
     setMessages((current) => [
       ...current,
       { id: crypto.randomUUID(), role: "coordinator", ...result }
@@ -93,6 +101,15 @@ export function App() {
     setLastReply(result.text);
     setPhase("ready");
     void playResponse(result.text, result.responseId).catch(() => undefined);
+  }
+
+  async function stopWork() {
+    stopAudio();
+    try {
+      if (await interruptActiveTurn()) setPhase("ready");
+    } catch {
+      setPhase("error");
+    }
   }
 
   async function processTurn(text: string) {
@@ -265,6 +282,11 @@ export function App() {
         </div>
 
         <div className="record-row">
+          {phase === "responding" && canInterrupt && (
+            <button type="button" className="interrupt-button" onClick={() => void stopWork()}>
+              Stop work
+            </button>
+          )}
           <button
             type="button"
             className={`record-button ${phase === "recording" ? "is-recording" : ""}`}

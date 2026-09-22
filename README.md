@@ -44,7 +44,7 @@ CarPlay is a later native iOS client using the same BFF and application protocol
 
 ## Status
 
-Design baseline and production-boundary scaffold. The current implementation contains a mobile PWA shell, Worker BFF, shared validated protocol, local mock adapters, Cloudflare Access JWT verification, production STT/TTS adapters, expiring response-audio tokens, and a Hermes adapter with opaque encrypted conversation state, durable resume, clarification responses, nonce-gated read-back approvals, and interruption. Resumable browser event streaming and client interruption controls remain roadmap work.
+Design baseline and production-boundary scaffold. The current implementation contains a mobile PWA shell, Worker BFF, shared validated protocol, local mock adapters, Cloudflare Access JWT verification, production STT/TTS adapters, expiring response-audio tokens, and a Hermes adapter with opaque encrypted conversation state, durable resume, clarification responses, nonce-gated read-back approvals, and interruption. Resumable browser event streaming and automatic new-turn redirection remain roadmap work.
 
 ## Development
 

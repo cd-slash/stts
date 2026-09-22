@@ -319,6 +319,19 @@ summary:focus-visible {
   font-size: 0.78rem;
 }
 
+.interrupt-button {
+  position: absolute;
+  left: 0;
+  min-height: 2.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--signal);
+  border-radius: 0.75rem;
+  background: transparent;
+  color: var(--signal-dark);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .text-entry {
   margin-top: 0.75rem;
   display: grid;
@@ -367,6 +380,7 @@ summary:focus-visible {
 @media (hover: hover) and (pointer: fine) {
   .replay:hover,
   .stop-button:hover,
+  .interrupt-button:hover,
   .input-actions button:hover:not(:disabled) {
     background: color-mix(in srgb, var(--ink) 12%, transparent);
   }
