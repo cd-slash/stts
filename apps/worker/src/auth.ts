@@ -1,14 +1,65 @@
+import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from "jose";
 import type { Context, Next } from "hono";
 
 export interface Bindings {
   AUTH_MODE: "local" | "access";
+  SPEECH_MODE: "mock" | "live";
+  AGENT_MODE: "mock" | "hermes";
   ACCESS_AUD?: string;
+  ACCESS_ISSUER?: string;
   HERMES_BASE_URL?: string;
   SPEECH_BASE_URL?: string;
+  SPEECH_API_KEY?: string;
+  SPEECH_TIMEOUT_MS?: string;
 }
 
 export interface Variables {
   subject: string;
+}
+
+const remoteKeys = new Map<string, JWTVerifyGetKey>();
+
+function normalizedIssuer(value: string): string {
+  const url = new URL(value);
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error("invalid Access issuer");
+  }
+  return url.origin;
+}
+
+function resolverFor(issuer: string): JWTVerifyGetKey {
+  const cached = remoteKeys.get(issuer);
+  if (cached) return cached;
+  const resolver = createRemoteJWKSet(new URL(`${issuer}/cdn-cgi/access/certs`));
+  remoteKeys.set(issuer, resolver);
+  return resolver;
+}
+
+export async function verifyAccessJwt(
+  token: string,
+  configuration: { audience: string; issuer: string },
+  resolver?: JWTVerifyGetKey,
+  now = Math.floor(Date.now() / 1000)
+): Promise<JWTPayload & { sub: string }> {
+  const issuer = normalizedIssuer(configuration.issuer);
+  const { payload } = await jwtVerify(token, resolver ?? resolverFor(issuer), {
+    algorithms: ["RS256"],
+    audience: configuration.audience,
+    issuer,
+    clockTolerance: 30,
+    currentDate: new Date(now * 1000)
+  });
+  if (typeof payload.sub !== "string" || payload.sub.length === 0) {
+    throw new Error("invalid Access subject");
+  }
+  return payload as JWTPayload & { sub: string };
 }
 
 export async function requireIdentity(
@@ -22,16 +73,24 @@ export async function requireIdentity(
   }
 
   const assertion = context.req.header("cf-access-jwt-assertion");
-  const email = context.req.header("cf-access-authenticated-user-email");
-
-  if (!assertion || !email) {
+  if (!assertion) {
     return context.json({ code: "AUTH_REQUIRED", message: "Sign in required", retryable: false }, 401);
   }
+  if (!context.env.ACCESS_AUD || !context.env.ACCESS_ISSUER) {
+    return context.json(
+      { code: "UPSTREAM_UNAVAILABLE", message: "Access unavailable", retryable: false },
+      503
+    );
+  }
 
-  // Deployment adds cryptographic JWT verification against ACCESS_AUD before
-  // AUTH_MODE may be switched to access. Header presence alone is not sufficient.
-  return context.json(
-    { code: "AUTH_REQUIRED", message: "Access verification not configured", retryable: false },
-    503
-  );
+  try {
+    const claims = await verifyAccessJwt(assertion, {
+      audience: context.env.ACCESS_AUD,
+      issuer: context.env.ACCESS_ISSUER
+    });
+    context.set("subject", claims.sub);
+    await next();
+  } catch {
+    return context.json({ code: "AUTH_REQUIRED", message: "Sign in required", retryable: false }, 401);
+  }
 }

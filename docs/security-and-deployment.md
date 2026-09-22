@@ -33,15 +33,20 @@ Store only in Worker secrets or the relevant platform secret manager:
 
 Do not put secrets in source control, Wrangler variables committed to Git, browser bundles, local storage, query strings, analytics, or error responses. Document secret names but never values.
 
-Proposed bindings:
+Current bindings:
 
-- `HERMES_BASE_URL`
-- `HERMES_ACCESS_CLIENT_ID` (secret if treated as credential)
-- `HERMES_ACCESS_CLIENT_SECRET`
+- `AUTH_MODE` (`access` in committed configuration)
+- `SPEECH_MODE` (`live` in committed configuration)
+- `AGENT_MODE` (`hermes` in committed configuration; fails closed until implemented)
 - `SPEECH_BASE_URL`
-- `SPEECH_ACCESS_CLIENT_ID`
-- `SPEECH_ACCESS_CLIENT_SECRET`
+- `SPEECH_API_KEY` (secret)
+- `SPEECH_TIMEOUT_MS`
 - `ACCESS_AUD`
+- `ACCESS_ISSUER` (the exact HTTPS Access team issuer)
+
+Hermes bindings will be finalized after its live JSON-RPC authentication and schema are captured. The current speech gateway uses a fixed client bearer key. If that authentication contract changes, replace the adapter credentials without changing the browser protocol.
+
+The Worker verifies the Access assertion's RS256 signature against the issuer JWKS and validates issuer, audience, expiry, activation time, and subject. Committed configuration defaults to Access authentication and live adapters; missing bindings fail closed. The local bypass is accepted only when an explicit ignored `.dev.vars` file sets `AUTH_MODE=local`.
 
 ## Request controls
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { speakMock, stopMockSpeech, submitMock, transcribeMock } from "./mock-client";
+import { speakLocal, stopLocalSpeech, submitTurn, transcribeVoiceNote } from "./api-client";
 
 type Phase = "idle" | "recording" | "transcribing" | "responding" | "ready" | "error";
 
@@ -52,7 +52,7 @@ export function App() {
     () => () => {
       recorderRef.current?.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
-      stopMockSpeech();
+      stopLocalSpeech();
     },
     []
   );
@@ -69,21 +69,21 @@ export function App() {
     setPhase("responding");
 
     try {
-      const reply = await submitMock(cleanText);
+      const reply = await submitTurn(cleanText);
       setMessages((current) => [
         ...current,
         { id: crypto.randomUUID(), role: "coordinator", ...reply }
       ]);
       setLastReply(reply.text);
       setPhase("ready");
-      speakMock(reply.text);
+      speakLocal(reply.text);
     } catch {
       setPhase("error");
     }
   }
 
   async function startRecording() {
-    stopMockSpeech();
+    stopLocalSpeech();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
@@ -98,7 +98,7 @@ export function App() {
         setPhase("transcribing");
         try {
           const audio = new Blob(chunksRef.current, { type: recorder.mimeType });
-          const transcript = await transcribeMock(audio);
+          const transcript = await transcribeVoiceNote(audio);
           await processTurn(transcript);
         } catch {
           setPhase("error");
@@ -143,7 +143,7 @@ export function App() {
               <div className="message-meta">
                 <span>{message.role === "user" ? "You" : "Chief of Staff"}</span>
                 {message.role === "coordinator" && (
-                  <button type="button" className="replay" onClick={() => speakMock(message.text)}>
+                  <button type="button" className="replay" onClick={() => speakLocal(message.text)}>
                     <PlayIcon />
                     <span className="sr-only">Replay response</span>
                   </button>
@@ -180,7 +180,7 @@ export function App() {
             <span aria-hidden="true" />
           </button>
           {lastReply && (
-            <button type="button" className="stop-button" onClick={stopMockSpeech}>
+            <button type="button" className="stop-button" onClick={stopLocalSpeech}>
               Stop audio
             </button>
           )}

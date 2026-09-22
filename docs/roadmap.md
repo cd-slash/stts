@@ -49,6 +49,8 @@ Deliverables:
 - Ephemeral audio handling.
 - Speech latency and error instrumentation.
 
+Current progress: the upstream request/response contract, bearer isolation, bounded transcription parsing, sanitized failures, and safe synthesis response headers are implemented and covered by adapter tests. Response-ID lookup and client playback through the BFF remain outstanding.
+
 Exit criteria:
 
 - Supported mobile browsers complete STT and TTS with production-like authentication.

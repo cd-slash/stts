@@ -54,6 +54,12 @@ The Worker is the application's only public backend. It is a policy and translat
 - Synthesize finalized coordinator text with Kokoro TTS.
 - Return explicit media types and machine-readable errors.
 
+The deployed contract was verified from the infrastructure source as:
+
+- `POST /v1/audio/transcriptions`, multipart field `file`, model `Qwen/Qwen3-ASR-1.7B-hf`;
+- `POST /v1/audio/speech`, JSON input, model `kokoro`, default voice `af_heart`;
+- fixed bearer authentication held only by the BFF.
+
 Speech remains app-owned rather than Hermes-owned. This lets another agent stack use the same voice pipeline and keeps speech behavior consistent across adapters.
 
 ### Hermes adapter

@@ -1,12 +1,13 @@
 import { createConversationCommand, submitTurnCommand } from "@stts/protocol";
 import { Hono } from "hono";
+import { AgentAdapterError, createAgentAdapter } from "./agent";
 import { requireIdentity, type Bindings, type Variables } from "./auth";
-import { runMockTurn } from "./mock-agent";
+import { createSpeechAdapter, SpeechAdapterError } from "./speech";
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-app.get("/api/health", (context) => context.json({ status: "ok" }));
 app.use("/api/*", requireIdentity);
+app.get("/api/health", (context) => context.json({ status: "ok" }));
 
 app.post("/api/conversations", async (context) => {
   const parsed = createConversationCommand.safeParse(await context.req.json().catch(() => null));
@@ -14,13 +15,22 @@ app.post("/api/conversations", async (context) => {
     return context.json({ code: "INVALID_REQUEST", message: "Invalid conversation", retryable: false }, 400);
   }
 
-  return context.json(
-    {
-      conversationId: crypto.randomUUID(),
-      profile: parsed.data.profile
-    },
-    201
-  );
+  try {
+    const conversation = await createAgentAdapter(context.env).createConversation(
+      parsed.data.profile,
+      context.get("subject")
+    );
+    return context.json(conversation, 201);
+  } catch (error) {
+    const adapterError =
+      error instanceof AgentAdapterError
+        ? error
+        : new AgentAdapterError("Agent service unavailable", true);
+    return context.json(
+      { code: "UPSTREAM_UNAVAILABLE", message: adapterError.message, retryable: adapterError.retryable },
+      adapterError.status as 503
+    );
+  }
 });
 
 app.post("/api/transcriptions", async (context) => {
@@ -36,12 +46,23 @@ app.post("/api/transcriptions", async (context) => {
     return context.json({ code: "PAYLOAD_TOO_LARGE", message: "Voice note too large", retryable: false }, 413);
   }
 
-  return context.json({
-    operationId,
-    text: "Summarize my next priorities.",
-    language: "en",
-    adapter: "mock"
-  });
+  try {
+    const result = await createSpeechAdapter(context.env).transcribe(audio);
+    return context.json({ operationId, ...result, adapter: context.env.SPEECH_MODE });
+  } catch (error) {
+    const adapterError =
+      error instanceof SpeechAdapterError
+        ? error
+        : new SpeechAdapterError("Transcription unavailable", true);
+    return context.json(
+      {
+        code: "TRANSCRIPTION_FAILED",
+        message: adapterError.message,
+        retryable: adapterError.retryable
+      },
+      adapterError.status as 500
+    );
+  }
 });
 
 app.post("/api/conversations/:conversationId/turns", async (context) => {
@@ -55,7 +76,22 @@ app.post("/api/conversations/:conversationId/turns", async (context) => {
     return context.json({ code: "INVALID_REQUEST", message: "Invalid turn", retryable: false }, 400);
   }
 
-  return context.json({ events: runMockTurn(parsed.data), adapter: "mock" }, 202);
+  try {
+    const events = await createAgentAdapter(context.env).submitTurn(
+      parsed.data,
+      context.get("subject")
+    );
+    return context.json({ events, adapter: context.env.AGENT_MODE }, 202);
+  } catch (error) {
+    const adapterError =
+      error instanceof AgentAdapterError
+        ? error
+        : new AgentAdapterError("Agent service unavailable", true);
+    return context.json(
+      { code: "UPSTREAM_UNAVAILABLE", message: adapterError.message, retryable: adapterError.retryable },
+      adapterError.status as 503
+    );
+  }
 });
 
 app.notFound((context) =>
