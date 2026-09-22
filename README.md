@@ -44,7 +44,7 @@ CarPlay is a later native iOS client using the same BFF and application protocol
 
 ## Status
 
-Design baseline and Phase 1 scaffold. The current implementation contains a mobile PWA shell, Worker BFF boundary, shared validated protocol, local mock adapters, Cloudflare Access JWT verification, and a production speech adapter. Hermes JSON-RPC mapping, response-audio routing, and event streaming remain roadmap work.
+Design baseline and production-boundary scaffold. The current implementation contains a mobile PWA shell, Worker BFF, shared validated protocol, local mock adapters, Cloudflare Access JWT verification, a production speech adapter, and a Hermes request/response adapter with opaque encrypted conversation state. Resumable browser event streaming, approval/clarification responses, interruption routes, and response-audio routing remain roadmap work.
 
 ## Development
 
@@ -74,4 +74,4 @@ npm run dev --workspace @stts/worker
 
 The committed Worker configuration uses Access mode and fails closed until JWT verification is configured. Local authentication bypass must remain in the ignored `.dev.vars` file.
 
-Production Worker configuration requires `ACCESS_ISSUER` and `ACCESS_AUD`. Add `SPEECH_API_KEY` with `wrangler secret put`; never place it in `wrangler.jsonc` or `.dev.vars.example`.
+Production Worker configuration requires `ACCESS_ISSUER` and `ACCESS_AUD`. Add `SPEECH_API_KEY`, `HERMES_ACCESS_CLIENT_ID`, `HERMES_ACCESS_CLIENT_SECRET`, and a random 32-byte base64url `CONVERSATION_STATE_KEY` with `wrangler secret put`; never place values in `wrangler.jsonc` or `.dev.vars.example`.

@@ -127,7 +127,6 @@ export class HermesTransport {
       response.body?.cancel();
       throw new HermesTransportError("Agent service unavailable", response.status >= 500);
     }
-    response.webSocket.accept();
     return response.webSocket;
   }
 }

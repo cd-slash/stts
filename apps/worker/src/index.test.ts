@@ -64,7 +64,28 @@ describe("worker API", () => {
     });
   });
 
-  it("fails closed while the Hermes adapter is unavailable", async () => {
+  it("creates an opaque owner-bound handle in Hermes mode", async () => {
+    const response = await app.request(
+      "/api/conversations",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ operationId: "op_1", profile: "chief-of-staff" })
+      },
+      {
+        ...env,
+        AGENT_MODE: "hermes",
+        CONVERSATION_STATE_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      }
+    );
+
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { conversationId: string };
+    expect(body.conversationId).toMatch(/^v1\./);
+    expect(body.conversationId).not.toContain("default");
+  });
+
+  it("fails closed when Hermes state encryption is unavailable", async () => {
     const response = await app.request(
       "/api/conversations",
       {

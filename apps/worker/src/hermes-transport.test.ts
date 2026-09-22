@@ -49,8 +49,7 @@ describe("Hermes authenticated transport", () => {
   });
 
   it("upgrades with both Hermes and Access authentication", async () => {
-    const accept = vi.fn();
-    const socket = { accept } as unknown as WebSocket;
+    const socket = {} as WebSocket;
     const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       if (url === "https://hermes.example.com/") {
@@ -65,6 +64,5 @@ describe("Hermes authenticated transport", () => {
 
     const transport = new HermesTransport(env, fetcher as typeof fetch);
     await expect(transport.connect()).resolves.toBe(socket);
-    expect(accept).toHaveBeenCalledOnce();
   });
 });

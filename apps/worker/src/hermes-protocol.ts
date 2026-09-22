@@ -41,10 +41,9 @@ function envelope(
   critical = true
 ): EventEnvelope {
   const cursor = Number.isFinite(event.seq) ? String(event.seq) : context.fallbackCursor;
-  const session = event.session_id || context.conversationId;
   return {
     version: "1",
-    eventId: `hermes:${session}:${cursor}:${type}`,
+    eventId: `event:${context.correlationId}:${cursor}:${type}`,
     conversationId: context.conversationId,
     cursor,
     occurredAt: context.occurredAt ?? new Date().toISOString(),
@@ -103,7 +102,7 @@ export function normalizeHermesEvent(
       }
       return [
         envelope(event, context, "response.completed", {
-          responseId: `hermes:${event.session_id || context.conversationId}:${event.seq ?? context.fallbackCursor}`,
+          responseId: `response:${context.correlationId}:${event.seq ?? context.fallbackCursor}`,
           text: text(payload)
         })
       ];

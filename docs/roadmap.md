@@ -66,7 +66,7 @@ Deliverables:
 - Chief of Staff default and verified profile mappings.
 - Compatibility tests for gateway upgrades.
 
-Current progress: the exact RPC methods, event shapes, replay semantics, and deployed source commit are documented. A tested pure normalizer maps core message, tool, specialist, clarification, approval, and error events while excluding internal reasoning. The machine-to-machine authentication path was proven against the live dashboard and implemented as a bounded Worker transport. Durable create/resume state, live event relay, interruption, and input responses remain outstanding.
+Current progress: the exact RPC methods, event shapes, replay semantics, and deployed source commit are documented. A tested normalizer maps core message, tool, specialist, clarification, approval, and error events while excluding internal reasoning. The machine authentication path is proven, and the Worker implements authenticated transport, owner-bound opaque conversation state, first-turn creation, subsequent resume, prompt submission, and terminal event collection. Resumable browser event streaming, interruption, and input responses remain outstanding.
 
 Exit criteria:
 

@@ -27,7 +27,7 @@ app.post("/api/conversations", async (context) => {
         ? error
         : new AgentAdapterError("Agent service unavailable", true);
     return context.json(
-      { code: "UPSTREAM_UNAVAILABLE", message: adapterError.message, retryable: adapterError.retryable },
+      { code: adapterError.code, message: adapterError.message, retryable: adapterError.retryable },
       adapterError.status as 503
     );
   }
@@ -77,18 +77,18 @@ app.post("/api/conversations/:conversationId/turns", async (context) => {
   }
 
   try {
-    const events = await createAgentAdapter(context.env).submitTurn(
+    const result = await createAgentAdapter(context.env).submitTurn(
       parsed.data,
       context.get("subject")
     );
-    return context.json({ events, adapter: context.env.AGENT_MODE }, 202);
+    return context.json({ ...result, adapter: context.env.AGENT_MODE }, 202);
   } catch (error) {
     const adapterError =
       error instanceof AgentAdapterError
         ? error
         : new AgentAdapterError("Agent service unavailable", true);
     return context.json(
-      { code: "UPSTREAM_UNAVAILABLE", message: adapterError.message, retryable: adapterError.retryable },
+      { code: adapterError.code, message: adapterError.message, retryable: adapterError.retryable },
       adapterError.status as 503
     );
   }

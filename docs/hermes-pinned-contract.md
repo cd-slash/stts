@@ -110,7 +110,9 @@ Live verification on 2026-09-22 established the machine path without changing He
 4. An upgrade to `/api/ws?token=<injected token>` with the same Access headers received `gateway.ready`, including a replay epoch.
 5. `gateway.ping` succeeded.
 
-The diagnostic policies and tokens used for verification were deleted immediately afterward. Production must use a separately named, host-specific service token stored only as Worker secrets. The Worker transport now implements the bounded bootstrap and authenticated upgrade sequence, but `AGENT_MODE=hermes` remains fail-closed until the conversation lifecycle preserves durable create/resume semantics.
+The diagnostic policies and tokens used for verification were deleted immediately afterward. Production must use a separately named, host-specific service token stored only as Worker secrets. The Worker now implements the bounded bootstrap, authenticated upgrade, first-turn `session.create`, subsequent `session.resume`, prompt submission, and completed-event collection sequence.
+
+The application conversation handle is AES-GCM authenticated state containing the profile, owner fingerprint, and—after the first turn—the durable Hermes session ID. The browser receives only that opaque handle. A fresh authenticated handle is returned after each turn and replaces the prior handle client-side. This preserves durable resume semantics without D1, Durable Objects, or exposing upstream IDs.
 
 The planned `hermes-origin.cdslash.com` Access gate accepted a diagnostic service token, but its origin returned HTTP 502 during verification. It is not currently a usable transport path. The separate Hermes OpenAI-compatible API is also not a substitute for this gateway contract because it does not preserve the same replay, clarification, approval, and interruption semantics.
 

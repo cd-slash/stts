@@ -37,7 +37,7 @@ describe("Hermes pinned protocol mapping", () => {
     expect(complete[0]).toMatchObject({
       cursor: "5",
       type: "response.completed",
-      data: { responseId: "hermes:session_1:5", text: "Hello there" }
+      data: { responseId: "response:op_1:5", text: "Hello there" }
     });
   });
 

@@ -81,6 +81,10 @@ export async function submitTurn(text: string): Promise<AgentReply> {
       })
     }).then(parseJson);
     if (!body || typeof body !== "object" || !("events" in body)) throw new Error("Invalid response");
+    if (!("conversationId" in body) || typeof body.conversationId !== "string") {
+      throw new Error("Invalid response");
+    }
+    conversation = Promise.resolve(body.conversationId);
     const parsed = eventEnvelope.array().safeParse(body.events);
     if (!parsed.success) throw new Error("Invalid response");
     const completed = parsed.data.slice().reverse().find((event) => event.type === "response.completed");
