@@ -51,6 +51,7 @@ function parseBootstrapToken(document: string): string {
 export class HermesTransport {
   private readonly origin: URL;
   private readonly timeoutMs: number;
+  private accessCookie?: string;
 
   constructor(
     private readonly env: Bindings,
@@ -106,6 +107,9 @@ export class HermesTransport {
       throw new HermesTransportError("Agent authentication unavailable", true);
     }
     try {
+      const setCookie = response.headers.get("set-cookie") ?? "";
+      const accessCookie = /(?:^|,\s*)CF_Authorization=([^;,\s]+)/i.exec(setCookie)?.[1];
+      if (accessCookie) this.accessCookie = `CF_Authorization=${accessCookie}`;
       return parseBootstrapToken(document);
     } catch (error) {
       console.error("hermes_bootstrap_invalid", { bytes: document.length });
@@ -124,6 +128,7 @@ export class HermesTransport {
       response = await fetcher(websocketUrl.href, {
         headers: {
           ...this.accessHeaders(),
+          ...(this.accessCookie ? { Cookie: this.accessCookie } : {}),
           Origin: this.origin.origin,
           Upgrade: "websocket"
         },

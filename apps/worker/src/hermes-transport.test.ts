@@ -53,12 +53,16 @@ describe("Hermes authenticated transport", () => {
     const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       if (url === "https://hermes.example.com/") {
-        return new Response('<script>window.__HERMES_SESSION_TOKEN__="token-with-a-space-value";</script>');
+        return new Response(
+          '<script>window.__HERMES_SESSION_TOKEN__="token-with-a-space-value";</script>',
+          { headers: { "set-cookie": "CF_Authorization=signed-access-cookie; HttpOnly; Secure" } }
+        );
       }
       expect(url).toBe("https://hermes.example.com/api/ws?token=token-with-a-space-value");
       const headers = new Headers(init?.headers);
       expect(headers.get("upgrade")).toBe("websocket");
       expect(headers.get("origin")).toBe("https://hermes.example.com");
+      expect(headers.get("cookie")).toBe("CF_Authorization=signed-access-cookie");
       return { status: 101, webSocket: socket, body: null } as unknown as Response;
     });
 
