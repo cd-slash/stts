@@ -1,0 +1,74 @@
+name: STTS
+options:
+  bundleIdPrefix: com.stts
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "17.0"
+    watchOS: "10.0"
+packages:
+  STTSCore:
+    path: STTSCore
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+targets:
+  STTSiOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: STTSiOS
+    dependencies:
+      - package: STTSCore
+        product: STTSCore
+      - target: STTSWatch
+        embed: true
+    info:
+      path: STTSiOS/Info.plist
+      properties:
+        CFBundleDisplayName: STTS
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        NSMicrophoneUsageDescription: Microphone access for voice notes and meeting recording.
+        UIBackgroundModes:
+          - audio
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.stts.mobile
+        TARGETED_DEVICE_FAMILY: "1"
+  STTSWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: STTSWatch
+    dependencies:
+      - package: STTSCore
+        product: STTSCore
+    info:
+      path: STTSWatch/Info.plist
+      properties:
+        CFBundleDisplayName: STTS
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: com.stts.mobile
+        WKRunsIndependentlyOfCompanionApp: true
+        NSMicrophoneUsageDescription: Microphone access for voice notes.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.stts.mobile.watchkitapp
+        TARGETED_DEVICE_FAMILY: "4"
+schemes:
+  STTSiOS:
+    build:
+      targets:
+        STTSiOS: all
+    run:
+      config: Debug
+  STTSWatch:
+    build:
+      targets:
+        STTSWatch: all
+    run:
+      config: Debug

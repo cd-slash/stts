@@ -97,7 +97,7 @@ Text limits are surface-dependent and enforced by the shared protocol and the Wo
 | `voice-live`, `text` | 50,000 characters |
 | `meeting-transcript` | 100,000 characters |
 
-A transcript longer than the meeting limit must be reduced client-side before submission. The intended approach is sequential partial summaries that build running notes, followed by one final turn over those notes.
+A transcript longer than the meeting limit must be reduced client-side before submission. The iOS client applies a stricter 40,000-character cap and submits the tail of the transcript when a meeting exceeds it.
 
 ## Authentication
 
