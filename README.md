@@ -44,7 +44,7 @@ CarPlay is a later native iOS client using the same BFF and application protocol
 
 ## Status
 
-An owner-only preview is deployed at `https://stts.cdslash.com` behind Cloudflare Access. The deployed speech path passes TTS-to-STT acceptance through the Worker. Hermes authentication, session creation, and prompt submission succeed, but the deployed Hermes service currently does not emit a terminal response before its session disconnects; direct Hermes testing reproduces the same upstream stall.
+An owner-only preview is deployed at `https://stts.cdslash.com` behind Cloudflare Access. Live acceptance passes conversation creation, first and resumed Hermes turns, completed-response replay after handle rotation, Kokoro synthesis, and Qwen transcription through the Worker.
 
 The implementation contains a mobile PWA shell, Worker BFF, shared validated protocol, local mock adapters, Cloudflare Access JWT verification, production STT/TTS adapters, expiring response-audio tokens, and a Hermes adapter with opaque encrypted conversation state, durable resume, stale-event rejection, clarification responses, nonce-gated read-back approvals, and interruption. Resumable browser event streaming, transcript hydration, durable idempotency, subject rate limiting, and automatic new-turn redirection remain roadmap work.
 
