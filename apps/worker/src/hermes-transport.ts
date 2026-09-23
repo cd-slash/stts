@@ -116,7 +116,6 @@ export class HermesTransport {
   async connect(): Promise<WebSocket> {
     const token = await this.bootstrapToken();
     const websocketUrl = new URL("/api/ws", this.origin);
-    websocketUrl.protocol = "wss:";
     websocketUrl.searchParams.set("token", token);
 
     let response: Response;

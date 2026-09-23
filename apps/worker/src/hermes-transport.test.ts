@@ -55,7 +55,7 @@ describe("Hermes authenticated transport", () => {
       if (url === "https://hermes.example.com/") {
         return new Response('<script>window.__HERMES_SESSION_TOKEN__="token-with-a-space-value";</script>');
       }
-      expect(url).toBe("wss://hermes.example.com/api/ws?token=token-with-a-space-value");
+      expect(url).toBe("https://hermes.example.com/api/ws?token=token-with-a-space-value");
       const headers = new Headers(init?.headers);
       expect(headers.get("upgrade")).toBe("websocket");
       expect(headers.get("origin")).toBe("https://hermes.example.com");
