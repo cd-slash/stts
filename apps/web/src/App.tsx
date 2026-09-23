@@ -32,7 +32,7 @@ function phaseLabel(phase: Phase) {
     idle: "Ready",
     recording: "Recording",
     transcribing: "Transcribing",
-    responding: "Chief of Staff",
+    responding: "Working",
     input: "Input required",
     ready: "Ready",
     error: "Voice unavailable"
@@ -183,39 +183,34 @@ export function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div>
-          <h1>STTS</h1>
-          <span className="profile">Chief of Staff</span>
-        </div>
+        <h1>Chief of Staff</h1>
         <div className="connection" aria-label={`${backendLabel} connected`}>
           <span aria-hidden="true" />
           {backendLabel}
         </div>
       </header>
 
-      <section className="ledger" aria-label="Conversation" aria-live="polite">
+      <p className={`state-line${phase === "error" ? " state-line--alert" : ""}`} role="status">
+        {phaseLabel(phase)}
+      </p>
+
+      <section className="conversation" aria-label="Conversation" aria-live="polite">
         {messages.length === 0 ? (
-          <div className="empty-state">
-            <SignalIcon />
-            <p>No messages</p>
-          </div>
+          <p className="empty-state">No messages</p>
         ) : (
           messages.map((message) => (
             <article className={`message message--${message.role}`} key={message.id}>
-              <div className="message-meta">
-                <span>{message.role === "user" ? "You" : "Chief of Staff"}</span>
-                {message.role === "coordinator" && (
-                  <button
-                    type="button"
-                    className="replay"
-                    onClick={() => void playResponse(message.text, message.responseId).catch(() => undefined)}
-                  >
-                    <PlayIcon />
-                    <span className="sr-only">Replay response</span>
-                  </button>
-                )}
-              </div>
-              <p>{message.text}</p>
+              <p className="message-text">{message.text}</p>
+              {message.role === "coordinator" && (
+                <button
+                  type="button"
+                  className="replay"
+                  onClick={() => void playResponse(message.text, message.responseId).catch(() => undefined)}
+                >
+                  <PlayIcon />
+                  <span className="sr-only">Replay response</span>
+                </button>
+              )}
               {message.specialist && (
                 <details className="activity">
                   <summary>{message.specialist}</summary>
@@ -276,82 +271,115 @@ export function App() {
             <p>{pendingInput.prompt}</p>
           </section>
         )}
-        <div className="transport-status" role="status">
-          <span>{phaseLabel(phase)}</span>
-          <span>{phase === "recording" ? formatDuration(seconds) : "Voice note"}</span>
-        </div>
+        {((phase === "responding" && canInterrupt) || lastReply) && (
+          <div className="secondary-actions">
+            {phase === "responding" && canInterrupt && (
+              <button type="button" className="quiet-button quiet-button--strong" onClick={() => void stopWork()}>
+                Stop work
+              </button>
+            )}
+            {lastReply && (
+              <button type="button" className="quiet-button" onClick={stopAudio}>
+                Stop audio
+              </button>
+            )}
+          </div>
+        )}
 
-        <div className="record-row">
-          {phase === "responding" && canInterrupt && (
-            <button type="button" className="interrupt-button" onClick={() => void stopWork()}>
-              Stop work
+        {phase === "recording" ? (
+          <div className="live-bar">
+            <span className="live-dot" aria-hidden="true" />
+            <span className="live-time">{formatDuration(seconds)}</span>
+            <button
+              type="button"
+              className="live-stop"
+              onClick={stopRecording}
+              aria-label="Stop recording"
+            >
+              Stop
             </button>
-          )}
-          <button
-            type="button"
-            className={`record-button ${phase === "recording" ? "is-recording" : ""}`}
-            onClick={phase === "recording" ? stopRecording : startRecording}
-            disabled={busy || pendingInput !== null}
-            aria-label={phase === "recording" ? "Stop recording" : "Record voice note"}
-            aria-pressed={phase === "recording"}
+          </div>
+        ) : (
+          <form
+            className="composer"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (pendingInput?.kind === "clarification") {
+                const answer = draft.trim();
+                if (!answer) return;
+                setMessages((current) => [
+                  ...current,
+                  { id: crypto.randomUUID(), role: "user", text: answer }
+                ]);
+                setDraft("");
+                void respondToInput({ kind: "text", text: answer });
+              } else {
+                void processTurn(draft);
+              }
+            }}
           >
-            <span aria-hidden="true" />
-          </button>
-          {lastReply && (
-            <button type="button" className="stop-button" onClick={stopAudio}>
-              Stop audio
+            <label className="sr-only" htmlFor="message">
+              Message
+            </label>
+            <textarea
+              ref={textEntryRef}
+              id="message"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder={pendingInput?.kind === "clarification" ? "Reply" : "Message"}
+              rows={1}
+              disabled={busy || pendingInput?.kind === "approval"}
+            />
+            <button
+              type="button"
+              className="icon-button"
+              onClick={startRecording}
+              disabled={busy || pendingInput !== null}
+              aria-label="Record voice note"
+            >
+              <MicIcon />
             </button>
-          )}
-        </div>
-
-        <form
-          className="text-entry"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (pendingInput?.kind === "clarification") {
-              const answer = draft.trim();
-              if (!answer) return;
-              setMessages((current) => [
-                ...current,
-                { id: crypto.randomUUID(), role: "user", text: answer }
-              ]);
-              setDraft("");
-              void respondToInput({ kind: "text", text: answer });
-            } else {
-              void processTurn(draft);
-            }
-          }}
-        >
-          <label className="sr-only" htmlFor="message">
-            Message
-          </label>
-          <textarea
-            ref={textEntryRef}
-            id="message"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={pendingInput?.kind === "clarification" ? "Reply" : "Message"}
-            rows={1}
-            disabled={busy || phase === "recording" || pendingInput?.kind === "approval"}
-          />
-          <button
-            type="submit"
-            disabled={
-              !draft.trim() || busy || phase === "recording" || pendingInput?.kind === "approval"
-            }
-          >
-            Send
-          </button>
-        </form>
+            <button
+              type="submit"
+              className="send-button"
+              disabled={!draft.trim() || busy || pendingInput?.kind === "approval"}
+              aria-label="Send"
+            >
+              <SendIcon />
+            </button>
+          </form>
+        )}
       </section>
     </main>
   );
 }
 
-function SignalIcon() {
+function MicIcon() {
   return (
-    <svg viewBox="0 0 64 32" aria-hidden="true">
-      <path d="M2 16h8l5-12 8 24 9-22 8 20 6-10h16" />
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z" fill="currentColor" />
+      <path
+        d="M6 11a6 6 0 0 0 12 0M12 17v4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function SendIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M12 19V5M6 11l6-6 6 6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
