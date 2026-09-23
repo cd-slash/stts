@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- CarPlay "voice-based conversational app" entitlement, introduced with
+	     iOS 26.4. Apple grants this per app; an unapproved value fails device
+	     signing. Wire it into the target only after the grant. See
+	     docs/carplay.md. -->
+	<key>com.apple.developer.carplay-voice-based-conversation</key>
+	<true/>
+</dict>
+</plist>

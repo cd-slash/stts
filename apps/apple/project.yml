@@ -33,10 +33,22 @@ targets:
         UIBackgroundModes:
           - audio
         ITSAppUsesNonExemptEncryption: false
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            CPTemplateApplicationSceneSessionRoleApplication:
+              - UISceneConfigurationName: CarPlay
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.stts.mobile
         TARGETED_DEVICE_FAMILY: "1"
+        # CarPlay "voice-based conversational app" entitlement (iOS 26.4+).
+        # Apple grants this per app; an unapproved value breaks device signing,
+        # so it stays unwired until the grant lands. When it does, set:
+        #   CODE_SIGN_ENTITLEMENTS: STTSiOS/STTSiOS.entitlements
+        # See docs/carplay.md.
+        # CODE_SIGN_ENTITLEMENTS: ""
   STTSWatch:
     type: application
     platform: watchOS

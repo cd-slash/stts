@@ -7,6 +7,10 @@ import STTSCore
 final class AppState: ObservableObject {
     private static let serverURLKey = "stts.serverURL"
 
+    /// The process-wide composition root. CarPlay scenes have no SwiftUI
+    /// environment, so its scene delegate reaches the app through here.
+    private(set) static var current: AppState?
+
     @Published var serverURLString: String {
         didSet {
             UserDefaults.standard.set(serverURLString, forKey: Self.serverURLKey)
@@ -56,6 +60,7 @@ final class AppState: ObservableObject {
         meetings.clientProvider = { [weak self] in self?.client }
         watch.activate()
         watch.pushState()
+        AppState.current = self
     }
 
     // MARK: Configuration

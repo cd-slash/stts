@@ -115,7 +115,7 @@ Deliverables:
 - CarPlay-safe command, response, clarification, and confirmation subset.
 - Driver-distraction and failure-mode review.
 
-Current progress: an `STTSCore` package, an iOS companion target, and a watchOS target are implemented with an owner-provisioned Access service token in the Keychain, WatchConnectivity audio relay, segmented meeting capture, on-device transcript assembly and browsing, and a bounded `meeting-transcript` turn. The Worker validates and echoes segment ordering metadata and passes the requested turn surface to Hermes, with tests and typechecking in place. The Swift sources have not been compiled or run on device because this environment has no Swift toolchain or Xcode.
+Current progress: an `STTSCore` package, an iOS companion target, and a watchOS target are implemented with an owner-provisioned Access service token in the Keychain, WatchConnectivity audio relay, segmented meeting capture, on-device transcript assembly and browsing, crash-safe draft persistence, and lossless chunked summarization. The Worker validates and echoes segment ordering metadata and passes the requested turn surface to Hermes, with tests and typechecking in place. A minimal CarPlay voice scene targets Apple's iOS 26.4 **voice-based conversational app** category; it is implemented but the entitlement is not yet granted or wired, so it stays dormant. The Swift sources have not been compiled or run on device because this environment has no Swift toolchain or Xcode.
 
 Exit criteria:
 
