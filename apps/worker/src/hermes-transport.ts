@@ -79,7 +79,7 @@ export class HermesTransport {
     try {
       response = await this.fetcher(this.origin.href, {
         headers: { ...this.accessHeaders(), accept: "text/html" },
-        redirect: "error",
+        redirect: "manual",
         signal: AbortSignal.timeout(this.timeoutMs)
       });
     } catch {
@@ -123,7 +123,7 @@ export class HermesTransport {
           Origin: this.origin.origin,
           Upgrade: "websocket"
         },
-        redirect: "error",
+        redirect: "manual",
         signal: AbortSignal.timeout(this.timeoutMs)
       });
     } catch {

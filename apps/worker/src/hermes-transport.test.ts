@@ -27,7 +27,7 @@ describe("Hermes authenticated transport", () => {
     await expect(transport.bootstrapToken()).resolves.toBe("synthetic-session-token");
     expect(fetcher).toHaveBeenCalledWith(
       "https://hermes.example.com/",
-      expect.objectContaining({ redirect: "error" })
+      expect.objectContaining({ redirect: "manual" })
     );
   });
 
