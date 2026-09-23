@@ -53,7 +53,7 @@ targets:
         CFBundleVersion: "1"
         WKApplication: true
         WKCompanionAppBundleIdentifier: com.stts.mobile
-        WKRunsIndependentlyOfCompanionApp: true
+        WKRunsIndependentlyOfCompanionApp: false
         NSMicrophoneUsageDescription: Microphone access for voice notes.
     settings:
       base:

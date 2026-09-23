@@ -397,8 +397,19 @@ final class STTSClientTests: XCTestCase {
 
     func testSubmitTurnCarriesMeetingSurface() async throws {
         let box = RequestBox()
+        let envelope: [String: Any] = [
+            "version": "1",
+            "eventId": "e1",
+            "conversationId": "conv-2",
+            "cursor": "c1",
+            "occurredAt": "2026-09-23T12:00:00Z",
+            "correlationId": "op-2",
+            "type": "response.completed",
+            "critical": true,
+            "data": ["responseId": "resp-1", "text": "Summary"]
+        ]
         let response = try jsonResponse(
-            ["conversationId": "conv-2", "events": [[String: Any]()]],
+            ["conversationId": "conv-2", "events": [envelope]],
             status: 202
         )
         let client = makeClient { request in
@@ -406,7 +417,7 @@ final class STTSClientTests: XCTestCase {
             return response
         }
 
-        _ = try? await client.submitTurn(
+        let submission = try await client.submitTurn(
             text: "transcript",
             conversationId: "conv-1",
             timezone: "UTC",
@@ -415,6 +426,7 @@ final class STTSClientTests: XCTestCase {
             operationId: "op-2"
         )
 
+        XCTAssertEqual(submission.conversationId, "conv-2")
         let request = try XCTUnwrap(box.request)
         let object = try bodyObject(request)
         XCTAssertEqual(object["surface"] as? String, "meeting-transcript")

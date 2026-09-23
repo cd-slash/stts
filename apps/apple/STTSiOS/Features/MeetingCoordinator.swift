@@ -289,7 +289,8 @@ final class MeetingCoordinator: ObservableObject {
     }
 
     private func finalizeMeeting() async {
-        for task in uploadTasks.values {
+        // Snapshot: applying an outcome removes entries from `uploadTasks`.
+        for task in Array(uploadTasks.values) {
             await task.value
         }
         uploadTasks.removeAll()
