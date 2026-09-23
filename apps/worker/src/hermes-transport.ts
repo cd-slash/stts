@@ -77,7 +77,8 @@ export class HermesTransport {
   async bootstrapToken(): Promise<string> {
     let response: Response;
     try {
-      response = await this.fetcher(this.origin.href, {
+      const fetcher = this.fetcher;
+      response = await fetcher(this.origin.href, {
         headers: { ...this.accessHeaders(), accept: "text/html" },
         redirect: "manual",
         signal: AbortSignal.timeout(this.timeoutMs)
@@ -120,7 +121,8 @@ export class HermesTransport {
 
     let response: Response;
     try {
-      response = await this.fetcher(websocketUrl.href, {
+      const fetcher = this.fetcher;
+      response = await fetcher(websocketUrl.href, {
         headers: {
           ...this.accessHeaders(),
           Origin: this.origin.origin,
