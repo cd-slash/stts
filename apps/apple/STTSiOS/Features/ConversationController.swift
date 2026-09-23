@@ -13,13 +13,17 @@ final class ConversationController: ObservableObject {
         case failed(String)
     }
 
-    /// Summarize submissions are bounded to this character count; longer
-    /// transcripts are truncated to the most recent text.
-    static let summarizeCharacterCap = 40_000
+    /// Meeting summaries are chunked rather than truncated. Each part stays
+    /// under the protocol's interactive turn ceiling, and the chunk count is
+    /// bounded so an extreme transcript cannot trigger unbounded agent work.
+    static let chunker = TranscriptChunker(maximumCharacters: 18_000)
+    static let maximumSummaryChunks = 12
 
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var recognizedText = ""
     @Published private(set) var replyText = ""
+    /// True when a summary had to drop trailing parts at `maximumSummaryChunks`.
+    @Published private(set) var summaryTruncated = false
 
     /// Invoked on the main actor with (replyText, audioData) after successful
     /// synthesis; used to relay replies to the watch.
@@ -123,18 +127,129 @@ final class ConversationController: ObservableObject {
         startTurn(text: text, surface: .text)
     }
 
-    /// Submits the assembled meeting transcript as a single turn.
+    /// Summarizes the assembled meeting transcript. Short transcripts go as one
+    /// turn; longer ones are summarized part by part and the notes combined, so
+    /// no text is discarded.
     func summarize(meeting: MeetingTranscript) {
         guard !isBusy else { return }
-        var text = meeting.assembledText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.count > Self.summarizeCharacterCap {
-            text = String(text.suffix(Self.summarizeCharacterCap))
-        }
+        let text = meeting.assembledText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
             phase = .failed("Transcript empty")
             return
         }
-        startTurn(text: text, surface: .meetingTranscript)
+
+        var chunks = Self.chunker.chunks(of: text)
+        var truncated = false
+        if chunks.count > Self.maximumSummaryChunks {
+            chunks = Array(chunks.prefix(Self.maximumSummaryChunks))
+            truncated = true
+        }
+        self.summaryTruncated = truncated
+        startSummary(chunks: chunks)
+    }
+
+    private func startSummary(chunks: [String]) {
+        runTask?.cancel()
+        runTask = Task {
+            guard let client = clientProvider?() else {
+                phase = .failed("Not configured")
+                return
+            }
+            do {
+                try await runSummary(chunks: chunks, client: client)
+            } catch {
+                guard !Task.isCancelled else {
+                    phase = .idle
+                    return
+                }
+                phase = .failed(Self.shortMessage(error))
+            }
+        }
+    }
+
+    /// Map then reduce: one partial-summary turn per chunk, then one turn that
+    /// combines the notes.
+    private func runSummary(chunks: [String], client: STTSClient) async throws {
+        phase = .submitting
+        if chunks.count == 1 {
+            let submission = try await submissionWithRetry(
+                text: chunks[0],
+                surface: .meetingTranscript,
+                client: client
+            )
+            conversationId = submission.conversationId
+            apply(submission.result)
+            return
+        }
+
+        var notes: [String] = []
+        for (offset, chunk) in chunks.enumerated() {
+            try Task.checkCancellation()
+            phase = .submitting
+            let prompt = """
+                Summarize part \(offset + 1) of \(chunks.count) of a meeting \
+                transcript into concise notes. Preserve decisions, action items, \
+                owners, and figures. Output notes only.
+
+                \(chunk)
+                """
+            let submission = try await submissionWithRetry(
+                text: prompt,
+                surface: .meetingTranscript,
+                client: client
+            )
+            conversationId = submission.conversationId
+            guard case .completed(let note, _) = submission.result else {
+                // A mid-summary input request cannot be answered automatically;
+                // surface it rather than silently dropping the rest.
+                apply(submission.result)
+                return
+            }
+            notes.append(note)
+        }
+
+        try Task.checkCancellation()
+        phase = .submitting
+        let combine = """
+            Combine these notes from one meeting into a single summary.
+
+            \(notes.joined(separator: "\n\n"))
+            """
+        let submission = try await submissionWithRetry(
+            text: combine,
+            surface: .meetingTranscript,
+            client: client
+        )
+        conversationId = submission.conversationId
+        apply(submission.result)
+    }
+
+    private func submissionWithRetry(
+        text: String,
+        surface: TurnSurface,
+        client: STTSClient
+    ) async throws -> TurnSubmission {
+        let operationId = newOperationId()
+        activeRunId = operationId
+        defer { activeRunId = nil }
+        do {
+            return try await performTurn(
+                text: text,
+                surface: surface,
+                operationId: operationId,
+                client: client
+            )
+        } catch let error as STTSClientError where error.isStaleConversation {
+            // Conversation handle rejected: recreate and retry once with the
+            // same operation ID, mirroring the web client.
+            conversationId = nil
+            return try await performTurn(
+                text: text,
+                surface: surface,
+                operationId: operationId,
+                client: client
+            )
+        }
     }
 
     private func startTurn(text: String, surface: TurnSurface) {
@@ -158,29 +273,11 @@ final class ConversationController: ObservableObject {
 
     private func runTurn(text: String, client: STTSClient, surface: TurnSurface) async throws {
         phase = .submitting
-        let operationId = newOperationId()
-        activeRunId = operationId
-        defer { activeRunId = nil }
-
-        let submission: TurnSubmission
-        do {
-            submission = try await performTurn(
-                text: text,
-                surface: surface,
-                operationId: operationId,
-                client: client
-            )
-        } catch let error as STTSClientError where error.isStaleConversation {
-            // Conversation handle rejected: recreate and retry once with the
-            // same operation ID, mirroring the web client.
-            conversationId = nil
-            submission = try await performTurn(
-                text: text,
-                surface: surface,
-                operationId: operationId,
-                client: client
-            )
-        }
+        let submission = try await submissionWithRetry(
+            text: text,
+            surface: surface,
+            client: client
+        )
         conversationId = submission.conversationId
         apply(submission.result)
     }

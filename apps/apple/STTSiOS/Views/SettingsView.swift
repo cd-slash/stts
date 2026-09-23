@@ -12,6 +12,10 @@ struct SettingsView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .accessibilityLabel("Worker server URL")
+                if appState.usesInsecureTransport {
+                    Text("Insecure HTTP")
+                        .foregroundStyle(.red)
+                }
             }
             Section("Access") {
                 NavigationLink {

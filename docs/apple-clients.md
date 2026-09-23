@@ -76,7 +76,7 @@ Assembly sorts by `segmentIndex`, tolerates out-of-order completion, ignores dup
 
 ## Meeting summary
 
-Meetings are not submitted as a single turn. The transcript is browseable on device, and a **Summarize** action explicitly hands the assembled text to Hermes:
+Meetings are not submitted as a single unbounded turn. The transcript is browseable on device, and a **Summarize** action explicitly hands the assembled text to Hermes:
 
 ```json
 {
@@ -97,7 +97,19 @@ Text limits are surface-dependent and enforced by the shared protocol and the Wo
 | `voice-live`, `text` | 50,000 characters |
 | `meeting-transcript` | 100,000 characters |
 
-A transcript longer than the meeting limit must be reduced client-side before submission. The iOS client applies a stricter 40,000-character cap and submits the tail of the transcript when a meeting exceeds it.
+Long transcripts are summarized in parts rather than truncated. The client splits the transcript into chunks of at most 18,000 characters on line boundaries, submits one partial-summary turn per chunk, and then submits one final turn that combines the resulting notes. Chunking is lossless: it preserves every non-whitespace character in order. The chunk count is bounded at 12 to stop an extreme transcript from triggering unbounded agent work; only beyond roughly 216,000 characters is trailing content dropped, and the client records that it happened.
+
+## Recovery
+
+A meeting in progress is persisted as a draft after every segment outcome, marker, and pause. A crash or termination therefore loses at most the segment being recorded, not the transcript so far.
+
+At launch the client:
+
+1. removes orphaned audio from a previous run — meeting segment directories, relayed reply audio, and transferred watch notes;
+2. promotes any surviving draft into a saved transcript flagged `interrupted`;
+3. deletes the draft once the transcript is saved.
+
+The saved transcript supersedes its draft, and the client waits for any pending draft write before deleting so a late write cannot resurrect it. Relayed reply audio is removed when its transfer completes.
 
 ## Authentication
 

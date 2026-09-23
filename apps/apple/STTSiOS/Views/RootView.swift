@@ -18,5 +18,8 @@ struct RootView: View {
             }
             .tabItem { Label("Settings", systemImage: "gearshape") }
         }
+        .task {
+            await appState.recoverAfterLaunch()
+        }
     }
 }

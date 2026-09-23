@@ -44,6 +44,8 @@ final class MeetingCoordinator: ObservableObject {
     private var meetingDirectory: URL?
     private var interruptionMonitor: InterruptionMonitor?
     private var recordingId = newOperationId()
+    private var recordingTitle = ""
+    private var draftTask: Task<Void, Never>?
     private let store: any MeetingStore
 
     init(store: any MeetingStore) {
@@ -82,6 +84,7 @@ final class MeetingCoordinator: ObservableObject {
         elapsedMs = 0
         statusMessage = nil
         startedAt = Date()
+        recordingTitle = Self.defaultTitle(startedAt: startedAt)
         startUptime = DispatchTime.now().uptimeNanoseconds
         interruptionMonitor = InterruptionMonitor { [weak self] began in
             if began {
@@ -101,6 +104,7 @@ final class MeetingCoordinator: ObservableObject {
         closeCurrentSegmentUpload()
         stopTicking()
         state = .paused
+        persistDraft()
         onStateChange?()
     }
 
@@ -124,6 +128,7 @@ final class MeetingCoordinator: ObservableObject {
             atOffsetMs: currentOffsetMs(),
             label: trimmed.isEmpty ? "Marker" : trimmed
         ))
+        persistDraft()
         onStateChange?()
     }
 
@@ -295,6 +300,63 @@ final class MeetingCoordinator: ObservableObject {
         }
         uploadTasks[index] = nil
         entries = assembler.orderedEntries()
+        persistDraft()
+    }
+
+    // MARK: Draft persistence and recovery
+
+    /// Rewrites the in-progress draft. Writes are chained so a later snapshot
+    /// can never be overtaken by an earlier one.
+    private func persistDraft() {
+        guard meetingDirectory != nil, !entries.isEmpty || !markers.isEmpty else { return }
+        let draft = MeetingDraft(
+            id: recordingId,
+            title: recordingTitle,
+            startedAt: startedAt,
+            durationMs: max(elapsedMs, segmenter.totalRecordedMs),
+            segments: entries,
+            assembledText: assembler.assembledText(),
+            markers: markers
+        )
+        let previous = draftTask
+        let store = self.store
+        draftTask = Task {
+            _ = await previous?.value
+            try? await store.saveDraft(draft)
+        }
+    }
+
+    /// Promotes drafts abandoned by a crash or termination into saved
+    /// transcripts, so transcribed text is never lost, then clears them.
+    func recoverUnfinishedMeetings() async {
+        guard let drafts = try? await store.listDrafts() else { return }
+        for draft in drafts {
+            if !draft.assembledText.isEmpty || !draft.markers.isEmpty {
+                try? await store.save(MeetingTranscript(draft: draft))
+            }
+            try? await store.deleteDraft(id: draft.id)
+        }
+    }
+
+    /// Removes audio left behind by an earlier run: meeting segment
+    /// directories, relayed watch replies, and transferred watch notes. Called
+    /// once at launch, before any recording starts.
+    nonisolated static func pruneOrphanedAudio() {
+        let manager = FileManager.default
+        let temporary = manager.temporaryDirectory
+        guard let entries = try? manager.contentsOfDirectory(
+            at: temporary,
+            includingPropertiesForKeys: nil
+        ) else {
+            return
+        }
+        for url in entries {
+            let name = url.lastPathComponent
+            if name.hasPrefix("stts-meeting-") || name.hasPrefix("stts-watch-reply-")
+                || name.hasPrefix("stts-watch-note-") {
+                try? manager.removeItem(at: url)
+            }
+        }
     }
 
     private func finalizeMeeting() async {
@@ -308,7 +370,8 @@ final class MeetingCoordinator: ObservableObject {
 
         let duration = max(elapsedMs, segmenter.totalRecordedMs)
         let meeting = MeetingTranscript(
-            title: Self.defaultTitle(startedAt: startedAt),
+            id: recordingId,
+            title: recordingTitle.isEmpty ? Self.defaultTitle(startedAt: startedAt) : recordingTitle,
             startedAt: startedAt,
             endedAt: Date(),
             durationMs: duration,
@@ -321,6 +384,12 @@ final class MeetingCoordinator: ObservableObject {
         } catch {
             statusMessage = "Save failed"
         }
+
+        // The saved transcript supersedes the draft. Wait for any pending
+        // draft write first so it cannot land after the delete.
+        _ = await draftTask?.value
+        draftTask = nil
+        try? await store.deleteDraft(id: recordingId)
 
         // Meeting audio never persists: drop the whole segment directory.
         if let meetingDirectory {

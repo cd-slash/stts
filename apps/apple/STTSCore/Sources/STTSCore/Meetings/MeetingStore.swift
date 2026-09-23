@@ -22,6 +22,9 @@ public struct MeetingTranscript: Codable, Sendable, Equatable, Identifiable {
     public var segments: [TranscriptEntry]
     public var assembledText: String
     public var markers: [MeetingMarker]
+    /// True when the recording never stopped cleanly — for example the app was
+    /// terminated mid-meeting and the draft was recovered at launch.
+    public var interrupted: Bool
 
     public init(
         id: String = UUID().uuidString,
@@ -31,7 +34,8 @@ public struct MeetingTranscript: Codable, Sendable, Equatable, Identifiable {
         durationMs: Int,
         segments: [TranscriptEntry],
         assembledText: String,
-        markers: [MeetingMarker]
+        markers: [MeetingMarker],
+        interrupted: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -41,15 +45,70 @@ public struct MeetingTranscript: Codable, Sendable, Equatable, Identifiable {
         self.segments = segments
         self.assembledText = assembledText
         self.markers = markers
+        self.interrupted = interrupted
+    }
+
+    /// Promotes an abandoned draft into a saved transcript.
+    public init(draft: MeetingDraft) {
+        self.init(
+            id: draft.id,
+            title: draft.title,
+            startedAt: draft.startedAt,
+            endedAt: nil,
+            durationMs: draft.durationMs,
+            segments: draft.segments,
+            assembledText: draft.assembledText,
+            markers: draft.markers,
+            interrupted: true
+        )
     }
 }
 
-/// On-device persistence for meeting transcripts.
+/// In-progress meeting state, rewritten after each segment outcome, marker, or
+/// pause so a crash or termination cannot lose already-transcribed text.
+/// Contains no audio.
+public struct MeetingDraft: Codable, Sendable, Equatable, Identifiable {
+    public var id: String
+    public var title: String
+    public var startedAt: Date
+    public var durationMs: Int
+    public var segments: [TranscriptEntry]
+    public var assembledText: String
+    public var markers: [MeetingMarker]
+    public var updatedAt: Date
+
+    public init(
+        id: String,
+        title: String,
+        startedAt: Date,
+        durationMs: Int,
+        segments: [TranscriptEntry],
+        assembledText: String,
+        markers: [MeetingMarker],
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.title = title
+        self.startedAt = startedAt
+        self.durationMs = durationMs
+        self.segments = segments
+        self.assembledText = assembledText
+        self.markers = markers
+        self.updatedAt = updatedAt
+    }
+}
+
+/// On-device persistence for meeting transcripts and in-progress drafts.
 public protocol MeetingStore: Sendable {
     func save(_ meeting: MeetingTranscript) async throws
     func listMeetings() async throws -> [MeetingTranscript]
     func meeting(id: String) async throws -> MeetingTranscript?
     func delete(id: String) async throws
+
+    /// Creates or replaces the draft for one recording.
+    func saveDraft(_ draft: MeetingDraft) async throws
+    func listDrafts() async throws -> [MeetingDraft]
+    func deleteDraft(id: String) async throws
 }
 
 /// JSON-file-backed store. Each meeting is one `<directory>/meeting-<id>.json`
@@ -72,10 +131,7 @@ public actor JSONFileMeetingStore: MeetingStore {
     }
 
     public func listMeetings() async throws -> [MeetingTranscript] {
-        let files = (
-            try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-        )?
-            .filter { $0.pathExtension == "json" } ?? []
+        let files = try jsonFiles(prefixed: Self.meetingPrefix)
 
         var meetings: [MeetingTranscript] = []
         for file in files {
@@ -98,10 +154,58 @@ public actor JSONFileMeetingStore: MeetingStore {
         try? FileManager.default.removeItem(at: fileURL(for: id))
     }
 
+    // MARK: Drafts
+
+    public func saveDraft(_ draft: MeetingDraft) async throws {
+        try ensureDirectory()
+        let data = try encoder.encode(draft)
+        try data.write(to: draftURL(for: draft.id), options: .atomic)
+    }
+
+    public func listDrafts() async throws -> [MeetingDraft] {
+        let files = try jsonFiles(prefixed: Self.draftPrefix)
+
+        var drafts: [MeetingDraft] = []
+        for file in files {
+            if let data = try? Data(contentsOf: file),
+               let draft = try? decoder.decode(MeetingDraft.self, from: data) {
+                drafts.append(draft)
+            }
+        }
+        return drafts.sorted { $0.startedAt > $1.startedAt }
+    }
+
+    public func deleteDraft(id: String) async throws {
+        try? FileManager.default.removeItem(at: draftURL(for: id))
+    }
+
     // MARK: Internals
 
+    private static let meetingPrefix = "meeting-"
+    private static let draftPrefix = "draft-"
+
+    private func jsonFiles(prefixed prefix: String) throws -> [URL] {
+        let entries = (try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil
+        )) ?? []
+        return entries.filter {
+            $0.pathExtension == "json" && $0.lastPathComponent.hasPrefix(prefix)
+        }
+    }
+
     private func fileURL(for id: String) -> URL {
-        directory.appendingPathComponent("meeting-\(Self.safeID(id)).json", isDirectory: false)
+        directory.appendingPathComponent(
+            "\(Self.meetingPrefix)\(Self.safeID(id)).json",
+            isDirectory: false
+        )
+    }
+
+    private func draftURL(for id: String) -> URL {
+        directory.appendingPathComponent(
+            "\(Self.draftPrefix)\(Self.safeID(id)).json",
+            isDirectory: false
+        )
     }
 
     private func ensureDirectory() throws {

@@ -146,4 +146,14 @@ final class WatchBridge: NSObject, WCSessionDelegate, ObservableObject {
             self.handleVoiceNote(at: target)
         }
     }
+
+    /// Removes the local copy of a relayed reply once the system has finished
+    /// transferring it, so relayed audio does not accumulate on disk.
+    nonisolated func session(
+        _ session: WCSession,
+        didFinish fileTransfer: WCSessionFileTransfer,
+        error: Error?
+    ) {
+        try? FileManager.default.removeItem(at: fileTransfer.file.fileURL)
+    }
 }

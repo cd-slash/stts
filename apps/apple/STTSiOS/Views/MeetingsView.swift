@@ -31,6 +31,11 @@ private struct MeetingsContent: View {
                         Text("\(Self.dateText(meeting.startedAt)) · \(STTSTimeFormat.clockString(ms: meeting.durationMs))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        if meeting.interrupted {
+                            Text("Interrupted")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
                     }
                     .accessibilityElement(children: .combine)
                 }

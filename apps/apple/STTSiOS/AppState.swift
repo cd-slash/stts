@@ -64,6 +64,21 @@ final class AppState: ObservableObject {
         client != nil && credentialConfigured
     }
 
+    /// True when the configured server URL would send Access credentials over
+    /// cleartext. Intended for local development only.
+    var usesInsecureTransport: Bool {
+        let trimmed = serverURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+        return URL(string: trimmed)?.scheme?.lowercased() == "http"
+    }
+
+    /// Runs once at launch: clears audio left by a previous run and promotes a
+    /// draft abandoned by a crash or termination into a saved transcript.
+    func recoverAfterLaunch() async {
+        MeetingCoordinator.pruneOrphanedAudio()
+        await meetings.recoverUnfinishedMeetings()
+        await library.refresh()
+    }
+
     func storeCredential(_ credential: Credential) throws {
         try credentials.store(credential)
         credentialConfigured = true

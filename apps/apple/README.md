@@ -169,3 +169,9 @@ echo as a failed segment rather than assembling the wrong text.
 - **Segment gaps.** Pausing capture produces a time gap between segments;
   ordering is preserved by `startedAtMs`, and the gap is visible as skipped
   clock time in the transcript.
+- **Draft granularity.** In-progress meetings are persisted after each segment,
+  marker, and pause, so a crash loses at most the segment being recorded. The
+  segment itself is not recoverable — its audio is gone.
+- **Summary chunk ceiling.** Summarization chunks at 18,000 characters and is
+  capped at 12 chunks (~216,000 characters). Only past that is trailing content
+  dropped, and the client records that it happened.

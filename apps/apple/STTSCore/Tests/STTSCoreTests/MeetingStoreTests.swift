@@ -90,4 +90,90 @@ final class MeetingStoreTests: XCTestCase {
         XCTAssertEqual(listed.count, 1)
         XCTAssertEqual(listed.first?.title, "Second")
     }
+
+    // MARK: Drafts
+
+    private func draft(id: String = UUID().uuidString, text: String) -> MeetingDraft {
+        MeetingDraft(
+            id: id,
+            title: "Meeting",
+            startedAt: Date(timeIntervalSince1970: 2_000),
+            durationMs: 45_000,
+            segments: [
+                TranscriptEntry(
+                    index: 0,
+                    startedAtMs: 0,
+                    durationMs: 45_000,
+                    status: .transcribed,
+                    text: text,
+                    language: nil
+                )
+            ],
+            assembledText: text,
+            markers: []
+        )
+    }
+
+    func testDraftRoundTripAndReplacement() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = JSONFileMeetingStore(directory: directory)
+
+        let id = UUID().uuidString
+        try await store.saveDraft(draft(id: id, text: "first"))
+        try await store.saveDraft(draft(id: id, text: "second"))
+
+        let drafts = try await store.listDrafts()
+        XCTAssertEqual(drafts.count, 1)
+        XCTAssertEqual(drafts.first?.assembledText, "second")
+    }
+
+    func testDraftsAndMeetingsDoNotAppearInEachOther() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = JSONFileMeetingStore(directory: directory)
+
+        try await store.save(meeting(title: "Saved", startedAt: Date(timeIntervalSince1970: 10)))
+        try await store.saveDraft(draft(text: "in progress"))
+
+        let meetings = try await store.listMeetings()
+        let drafts = try await store.listDrafts()
+        XCTAssertEqual(meetings.count, 1)
+        XCTAssertEqual(drafts.count, 1)
+        XCTAssertEqual(meetings.first?.title, "Saved")
+        XCTAssertEqual(drafts.first?.assembledText, "in progress")
+    }
+
+    func testDeleteDraftIsIdempotent() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = JSONFileMeetingStore(directory: directory)
+
+        let id = UUID().uuidString
+        try await store.saveDraft(draft(id: id, text: "text"))
+        try await store.deleteDraft(id: id)
+        try await store.deleteDraft(id: id)
+
+        let drafts = try await store.listDrafts()
+        XCTAssertTrue(drafts.isEmpty)
+    }
+
+    func testRecoveredDraftBecomesInterruptedTranscript() {
+        let recovered = MeetingTranscript(draft: draft(text: "recovered text"))
+
+        XCTAssertTrue(recovered.interrupted)
+        XCTAssertNil(recovered.endedAt)
+        XCTAssertEqual(recovered.assembledText, "recovered text")
+        XCTAssertFalse(
+            MeetingTranscript(
+                title: "Clean",
+                startedAt: Date(),
+                durationMs: 1,
+                segments: [],
+                assembledText: "",
+                markers: []
+            ).interrupted,
+            "a normally finished meeting is not interrupted"
+        )
+    }
 }
