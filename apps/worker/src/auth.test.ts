@@ -65,4 +65,15 @@ describe("Access JWT verification", () => {
       )
     ).rejects.toMatchObject({ code: "ERR_JWT_EXPIRED" });
   });
+
+  it("binds an Access service token to its signed common name", async () => {
+    const { token, resolver } = await fixture({ sub: "", common_name: "acceptance-token" });
+    const claims = await verifyAccessJwt(
+      token,
+      { audience: "audience-1", issuer: "https://example.cloudflareaccess.com" },
+      resolver,
+      1_950_000_000
+    );
+    expect(claims.sub).toBe("service:acceptance-token");
+  });
 });

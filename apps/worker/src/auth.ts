@@ -62,10 +62,16 @@ export async function verifyAccessJwt(
     clockTolerance: 30,
     currentDate: new Date(now * 1000)
   });
-  if (typeof payload.sub !== "string" || payload.sub.length === 0) {
+  const subject =
+    typeof payload.sub === "string" && payload.sub.length > 0
+      ? payload.sub
+      : typeof payload.common_name === "string" && payload.common_name.length > 0
+        ? `service:${payload.common_name}`
+        : undefined;
+  if (!subject) {
     throw new Error("invalid Access subject");
   }
-  return payload as JWTPayload & { sub: string };
+  return { ...payload, sub: subject } as JWTPayload & { sub: string };
 }
 
 export async function requireIdentity(

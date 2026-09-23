@@ -83,9 +83,11 @@ export class HermesTransport {
         signal: AbortSignal.timeout(this.timeoutMs)
       });
     } catch {
+      console.error("hermes_bootstrap_fetch_failed");
       throw new HermesTransportError("Agent authentication unavailable", true);
     }
     if (!response.ok) {
+      console.error("hermes_bootstrap_rejected", { status: response.status });
       response.body?.cancel();
       throw new HermesTransportError("Agent authentication unavailable", response.status >= 500);
     }
@@ -99,7 +101,12 @@ export class HermesTransport {
     if (document.length > MAX_BOOTSTRAP_BYTES) {
       throw new HermesTransportError("Agent authentication unavailable", true);
     }
-    return parseBootstrapToken(document);
+    try {
+      return parseBootstrapToken(document);
+    } catch (error) {
+      console.error("hermes_bootstrap_invalid", { bytes: document.length });
+      throw error;
+    }
   }
 
   async connect(): Promise<WebSocket> {
