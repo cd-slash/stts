@@ -131,11 +131,19 @@ export class HermesTransport {
         redirect: "manual",
         signal: AbortSignal.timeout(this.timeoutMs)
       });
-    } catch {
+    } catch (error) {
+      console.error("hermes_websocket_fetch_failed", {
+        name: error instanceof Error ? error.name : "unknown",
+        message: error instanceof Error ? error.message.slice(0, 200) : "unknown"
+      });
       throw new HermesTransportError("Agent service unavailable", true);
     }
 
     if (response.status !== 101 || !response.webSocket) {
+      console.error("hermes_websocket_rejected", {
+        status: response.status,
+        websocket: Boolean(response.webSocket)
+      });
       response.body?.cancel();
       throw new HermesTransportError("Agent service unavailable", response.status >= 500);
     }
