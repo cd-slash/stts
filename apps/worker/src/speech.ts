@@ -94,7 +94,11 @@ export class OpenAiSpeechAdapter implements SpeechAdapter {
         redirect: "error",
         signal: AbortSignal.timeout(this.timeoutMs)
       });
-    } catch {
+    } catch (error) {
+      console.error("speech_transcription_fetch_failed", {
+        name: error instanceof Error ? error.name : "unknown",
+        message: error instanceof Error ? error.message.slice(0, 200) : "unknown"
+      });
       throw new SpeechAdapterError("Transcription unavailable", true);
     }
 
@@ -138,7 +142,11 @@ export class OpenAiSpeechAdapter implements SpeechAdapter {
         redirect: "error",
         signal: AbortSignal.timeout(this.timeoutMs)
       });
-    } catch {
+    } catch (error) {
+      console.error("speech_synthesis_fetch_failed", {
+        name: error instanceof Error ? error.name : "unknown",
+        message: error instanceof Error ? error.message.slice(0, 200) : "unknown"
+      });
       throw new SpeechAdapterError("Synthesis unavailable", true);
     }
     if (!response.ok || !response.headers.get("content-type")?.startsWith("audio/")) {
