@@ -54,9 +54,12 @@ Multipart request containing:
 - `operationId`
 - `audio`
 - optional declared `language`
+- optional segment ordering metadata: `recordingId`, `segmentIndex`, `segmentStartedAtMs`, `segmentDurationMs`
 - codec and duration metadata when known
 
 The response contains recognized text, detected language when available, and an operation status. Confidence is included only if the speech backend provides a meaningful calibrated value.
+
+Segment metadata exists for browserable meeting recordings, which are captured and uploaded as bounded segments rather than one long request. The Worker validates the fields, rejects partial claims, and echoes them back so a client can order results that complete out of order. The Worker derives nothing from them and stores nothing: they are ordering hints returned to the caller.
 
 ### Submit turn
 
@@ -69,6 +72,7 @@ The response contains recognized text, detected language when available, and an 
     "text": "Book a service for Friday"
   },
   "profileOverride": null,
+  "surface": "voice-live",
   "clientContext": {
     "timezone": "Europe/London",
     "locale": "en-GB"
@@ -76,7 +80,11 @@ The response contains recognized text, detected language when available, and an 
 }
 ```
 
+`surface` is a bounded enum — `voice-live`, `text`, or `meeting-transcript` — that tells the adapter what kind of input produced the turn. It is not free-form and is never forwarded as an arbitrary upstream parameter.
+
 Only allowlisted context is accepted. Arbitrary browser or device state is not forwarded.
+
+Accepted text is bounded by surface: 50,000 characters for interactive turns and 100,000 for a `meeting-transcript`. A longer meeting transcript must be reduced client-side before submission.
 
 ### Answer input request
 

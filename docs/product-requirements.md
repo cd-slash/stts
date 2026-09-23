@@ -47,6 +47,23 @@ The initial user is the single owner of the deployment. They use a phone-oriente
 
 Text may stream before synthesis completes, but speech begins only when the complete response voice note is available. This avoids sentence-boundary artifacts and makes replay deterministic.
 
+### Wrist voice note
+
+1. The user records a short voice note on Apple Watch.
+2. The watch hands the audio to the paired iPhone; it holds no credential and performs no network request.
+3. The phone transcribes, submits the turn, and returns the completed response.
+4. The reply is playable on the watch.
+
+### Meeting recording
+
+1. The user starts a meeting recording on the phone, or from the watch as a remote control.
+2. Audio is captured as bounded segments and each closed segment is uploaded for transcription.
+3. A segment's audio is discarded once it has been transcribed. A failed segment is retried a bounded number of times and then recorded as a gap rather than merged across.
+4. The transcript is assembled with timestamps and retained on device, where it can be browsed.
+5. A **Summarize** action explicitly submits the transcript to the coordinator as one meeting turn and plays the reply.
+
+Meetings are deliberately not auto-submitted: a long transcript is an artifact the user reviews, not a message that silently starts agent work. Meetings are captured on the phone because watchOS restricts sustained background recording and watch audio quality is unsuitable for hour-long capture.
+
 ### Coordinator and specialists
 
 Hermes **Chief of Staff** is the default coordinator. It may route to:

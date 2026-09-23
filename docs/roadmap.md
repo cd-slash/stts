@@ -104,14 +104,18 @@ Exit criteria:
 - No known path can voice-approve an action without explicit confirmation.
 - Text-only operation remains complete and accessible.
 
-## Phase 6: native iOS and CarPlay discovery
+## Phase 6: native iOS, watchOS, and CarPlay
 
 Deliverables:
 
 - Current Apple entitlement/category eligibility assessment.
 - Swift client spike using the same BFF protocol.
+- watchOS voice notes and meeting control, with audio relayed to the phone.
+- iOS meeting capture, segmented upload, on-device transcript, and explicit summary.
 - CarPlay-safe command, response, clarification, and confirmation subset.
 - Driver-distraction and failure-mode review.
+
+Current progress: an `STTSCore` package, an iOS companion target, and a watchOS target are implemented with an owner-provisioned Access service token in the Keychain, WatchConnectivity audio relay, segmented meeting capture, on-device transcript assembly and browsing, and a bounded `meeting-transcript` turn. The Worker validates and echoes segment ordering metadata and passes the requested turn surface to Hermes, with tests and typechecking in place. The Swift sources have not been compiled or run on device because this environment has no Swift toolchain or Xcode.
 
 Exit criteria:
 

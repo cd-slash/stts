@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventEnvelope, submitTurnCommand } from "./index";
+import { eventEnvelope, submitTurnCommand, transcriptionSegment } from "./index";
 
 describe("protocol schemas", () => {
   it("accepts a normalized completion event", () => {
@@ -28,5 +28,48 @@ describe("protocol schemas", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it("separates the interactive and meeting text ceilings", () => {
+    const base = {
+      operationId: "op_1",
+      conversationId: "conv_1",
+      input: { kind: "text", text: "x".repeat(60_000) },
+      profileOverride: null,
+      clientContext: { timezone: "Europe/London", locale: "en-GB" }
+    };
+
+    expect(submitTurnCommand.safeParse(base).success).toBe(false);
+    expect(
+      submitTurnCommand.safeParse({ ...base, surface: "meeting-transcript" }).success
+    ).toBe(true);
+    expect(submitTurnCommand.safeParse({ ...base, surface: "text" }).success).toBe(false);
+  });
+
+  it("defaults the turn surface to a live voice turn", () => {
+    const result = submitTurnCommand.safeParse({
+      operationId: "op_1",
+      conversationId: "conv_1",
+      input: { kind: "text", text: "Hello" },
+      profileOverride: null,
+      clientContext: { timezone: "Europe/London", locale: "en-GB" }
+    });
+
+    expect(result.success && result.data.surface).toBe("voice-live");
+  });
+
+  it("requires segment identity and timing to be claimed together", () => {
+    expect(
+      transcriptionSegment.safeParse({ recordingId: "meeting-1", segmentIndex: "2" }).success
+    ).toBe(true);
+    expect(transcriptionSegment.safeParse({ segmentIndex: "2" }).success).toBe(false);
+    expect(
+      transcriptionSegment.safeParse({ segmentStartedAtMs: "0", segmentDurationMs: "1000" }).success
+    ).toBe(false);
+    expect(
+      transcriptionSegment.safeParse({ recordingId: "meeting-1", segmentIndex: "2", segmentStartedAtMs: "0" })
+        .success
+    ).toBe(false);
+    expect(transcriptionSegment.safeParse({ recordingId: "../escape" }).success).toBe(false);
   });
 });

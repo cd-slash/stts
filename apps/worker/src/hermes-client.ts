@@ -312,7 +312,7 @@ export async function runHermesTurn(
     await client.call("prompt.submit", {
       session_id: session.session_id,
       text: command.input.text,
-      surface: "voice-live"
+      surface: command.surface
     });
     return { events: await collector.promise, storedSessionId };
   } catch (error) {
@@ -357,6 +357,7 @@ export async function runHermesInputResponse(
         conversationId: command.conversationId,
         input: { kind: "text", text: command.answer.text || command.answer.kind },
         profileOverride: null,
+        surface: "voice-live",
         clientContext: { timezone: "UTC", locale: "en" }
       },
       turnTimeout(env),

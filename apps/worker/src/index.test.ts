@@ -68,6 +68,94 @@ describe("worker API", () => {
     });
   });
 
+  it("echoes ordering metadata for a meeting segment", async () => {
+    const form = new FormData();
+    form.set("operationId", "op_segment");
+    form.set("recordingId", "meeting-7f3a");
+    form.set("segmentIndex", "4");
+    form.set("segmentStartedAtMs", "180000");
+    form.set("segmentDurationMs", "45000");
+    form.set("audio", new File(["audio"], "segment.m4a", { type: "audio/mp4" }));
+    const response = await app.request("/api/transcriptions", { method: "POST", body: form }, env);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      operationId: "op_segment",
+      recordingId: "meeting-7f3a",
+      segmentIndex: 4,
+      segmentStartedAtMs: 180000,
+      segmentDurationMs: 45000
+    });
+  });
+
+  it("rejects a segment index without its recording", async () => {
+    const form = new FormData();
+    form.set("operationId", "op_segment");
+    form.set("segmentIndex", "4");
+    form.set("audio", new File(["audio"], "segment.m4a", { type: "audio/mp4" }));
+    const response = await app.request("/api/transcriptions", { method: "POST", body: form }, env);
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ code: "INVALID_REQUEST" });
+  });
+
+  it("rejects segment timing without a segment identity", async () => {
+    const form = new FormData();
+    form.set("operationId", "op_segment");
+    form.set("segmentStartedAtMs", "0");
+    form.set("segmentDurationMs", "1000");
+    form.set("audio", new File(["audio"], "segment.m4a", { type: "audio/mp4" }));
+    const response = await app.request("/api/transcriptions", { method: "POST", body: form }, env);
+
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects an unsafe recording identifier", async () => {
+    const form = new FormData();
+    form.set("operationId", "op_segment");
+    form.set("recordingId", "../../etc/passwd");
+    form.set("segmentIndex", "0");
+    form.set("audio", new File(["audio"], "segment.m4a", { type: "audio/mp4" }));
+    const response = await app.request("/api/transcriptions", { method: "POST", body: form }, env);
+
+    expect(response.status).toBe(400);
+  });
+
+  it("accepts a meeting transcript surface and rejects an oversized interactive turn", async () => {
+    const meeting = await app.request(
+      "/api/conversations/conv_1/turns",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operationId: "op_meeting",
+          input: { kind: "text", text: "x".repeat(60_000) },
+          profileOverride: null,
+          surface: "meeting-transcript",
+          clientContext: { timezone: "UTC", locale: "en" }
+        })
+      },
+      env
+    );
+    expect(meeting.status).toBe(202);
+
+    const interactive = await app.request(
+      "/api/conversations/conv_1/turns",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operationId: "op_voice",
+          input: { kind: "text", text: "x".repeat(60_000) },
+          profileOverride: null,
+          clientContext: { timezone: "UTC", locale: "en" }
+        })
+      },
+      env
+    );
+    expect(interactive.status).toBe(400);
+  });
+
   it("creates an opaque owner-bound handle in Hermes mode", async () => {
     const response = await app.request(
       "/api/conversations",

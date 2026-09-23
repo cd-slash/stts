@@ -3,7 +3,8 @@ import {
   createConversationCommand,
   interruptRunCommand,
   synthesizeResponseCommand,
-  submitTurnCommand
+  submitTurnCommand,
+  transcriptionSegment
 } from "@stts/protocol";
 import { Hono } from "hono";
 import { AgentAdapterError, createAgentAdapter } from "./agent";
@@ -16,6 +17,24 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 app.use("/api/*", requireIdentity);
 app.get("/api/health", (context) => context.json({ status: "ok" }));
+
+const segmentFieldNames = [
+  "recordingId",
+  "segmentIndex",
+  "segmentStartedAtMs",
+  "segmentDurationMs"
+] as const;
+
+// Only non-empty string fields are forwarded to the schema so a client that
+// omits a field is distinguishable from one that sends it blank.
+function segmentFields(form: FormData): Record<string, string> {
+  const raw: Record<string, string> = {};
+  for (const name of segmentFieldNames) {
+    const value = form.get(name);
+    if (typeof value === "string" && value.length > 0) raw[name] = value;
+  }
+  return raw;
+}
 
 app.post("/api/conversations", async (context) => {
   const parsed = createConversationCommand.safeParse(await context.req.json().catch(() => null));
@@ -57,13 +76,26 @@ app.post("/api/transcriptions", async (context) => {
     return context.json({ code: "INVALID_REQUEST", message: "Audio required", retryable: false }, 400);
   }
 
+  const segment = transcriptionSegment.safeParse(segmentFields(form));
+  if (!segment.success) {
+    return context.json(
+      { code: "INVALID_REQUEST", message: "Invalid segment metadata", retryable: false },
+      400
+    );
+  }
+
   if (audio.size > 20 * 1024 * 1024) {
     return context.json({ code: "PAYLOAD_TOO_LARGE", message: "Voice note too large", retryable: false }, 413);
   }
 
   try {
     const result = await createSpeechAdapter(context.env).transcribe(audio);
-    return context.json({ operationId, ...result, adapter: context.env.SPEECH_MODE });
+    return context.json({
+      operationId,
+      ...result,
+      ...segment.data,
+      adapter: context.env.SPEECH_MODE
+    });
   } catch (error) {
     const adapterError =
       error instanceof SpeechAdapterError

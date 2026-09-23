@@ -35,18 +35,20 @@ CarPlay is a later native iOS client using the same BFF and application protocol
 
 - [Product requirements](docs/product-requirements.md)
 - [Architecture](docs/architecture.md)
+- [Apple clients](docs/apple-clients.md)
 - [Communication flow](docs/communication-flow.md)
 - [Agent adapter protocol](docs/agent-adapter-protocol.md)
 - [Hermes pinned contract](docs/hermes-pinned-contract.md)
 - [Security and deployment](docs/security-and-deployment.md)
 - [Roadmap](docs/roadmap.md)
 - [Architecture decision record](docs/decisions/0001-worker-bff.md)
+- [Native clients decision record](docs/decisions/0002-native-clients.md)
 
 ## Status
 
 An owner-only preview is deployed at `https://stts.cdslash.com` behind Cloudflare Access. Live acceptance passes conversation creation, first and resumed Hermes turns, completed-response replay after handle rotation, Kokoro synthesis, and Qwen transcription through the Worker.
 
-The implementation contains a mobile PWA shell, Worker BFF, shared validated protocol, local mock adapters, Cloudflare Access JWT verification, production STT/TTS adapters, expiring response-audio tokens, and a Hermes adapter with opaque encrypted conversation state, durable resume, stale-event rejection, clarification responses, nonce-gated read-back approvals, and interruption. Resumable browser event streaming, transcript hydration, durable idempotency, subject rate limiting, and automatic new-turn redirection remain roadmap work.
+The implementation contains a mobile PWA shell, Worker BFF, shared validated protocol, local mock adapters, Cloudflare Access JWT verification, production STT/TTS adapters, expiring response-audio tokens, and a Hermes adapter with opaque encrypted conversation state, durable resume, stale-event rejection, clarification responses, nonce-gated read-back approvals, and interruption. Native iOS and watchOS clients add wrist voice notes, meeting capture with segmented upload, on-device transcripts, and a bounded meeting-summary turn; see [Apple clients](docs/apple-clients.md). Resumable browser event streaming, transcript hydration, durable idempotency, subject rate limiting, and automatic new-turn redirection remain roadmap work.
 
 ## Development
 

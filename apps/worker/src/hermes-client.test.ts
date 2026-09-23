@@ -115,6 +115,7 @@ const command: SubmitTurnCommand = {
   conversationId: "opaque-conversation",
   input: { kind: "text", text: "Hello" },
   profileOverride: null,
+  surface: "voice-live",
   clientContext: { timezone: "UTC", locale: "en" }
 };
 
@@ -141,6 +142,22 @@ describe("Hermes turn lifecycle", () => {
     ]);
     expect(JSON.stringify(result.events)).not.toContain("runtime-secret");
     expect(JSON.stringify(result.events)).not.toContain("stored-secret");
+  });
+
+  it("passes the requested surface to prompt submission", async () => {
+    const socket = new FakeHermesSocket();
+    const provider: HermesSocketProvider = { connect: async () => socket as unknown as WebSocket };
+    await runHermesTurn(
+      env,
+      { profile: "default" },
+      { ...command, surface: "meeting-transcript" },
+      provider
+    );
+
+    expect(socket.requests[1]).toMatchObject({
+      method: "prompt.submit",
+      params: { surface: "meeting-transcript" }
+    });
   });
 
   it("resumes subsequent turns by durable session ID", async () => {
