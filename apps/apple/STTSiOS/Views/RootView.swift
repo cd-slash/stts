@@ -5,12 +5,18 @@ struct RootView: View {
 
     var body: some View {
         TabView {
-            VoiceNoteView()
-                .tabItem { Label("Voice", systemImage: "mic") }
-            MeetingsView()
-                .tabItem { Label("Meetings", systemImage: "list.bullet") }
-            SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape") }
+            NavigationStack {
+                VoiceNoteView()
+            }
+            .tabItem { Label("Voice", systemImage: "mic") }
+            NavigationStack {
+                MeetingsView()
+            }
+            .tabItem { Label("Meetings", systemImage: "list.bullet") }
+            NavigationStack {
+                SettingsView()
+            }
+            .tabItem { Label("Settings", systemImage: "gearshape") }
         }
     }
 }

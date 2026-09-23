@@ -164,6 +164,15 @@ final class MeetingCoordinator: ObservableObject {
             self.recorder = recorder
         } catch {
             recorder = nil
+            // The segment was opened before a recorder existed. Close and
+            // register it so the gap appears as an explicit failed segment
+            // instead of silently missing from the transcript.
+            if let stray = segmenter.endCurrentSegment(atOffsetMs: currentOffsetMs()) {
+                assembler.register(segment: stray)
+                assembler.markFailed(index: stray.index)
+                try? FileManager.default.removeItem(at: stray.fileURL)
+                entries = assembler.orderedEntries()
+            }
             state = .paused
             statusMessage = "Recording unavailable"
             onStateChange?()

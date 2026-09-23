@@ -1,29 +1,5 @@
 import Foundation
 
-/// Plans bounded windows for a discrete voice note: one window up to the
-/// target duration, split into consecutive windows when longer.
-public struct VoiceNoteSegmenter: Sendable, Equatable {
-    public let targetSegmentDurationMs: Int
-
-    public init(targetSegmentDurationMs: Int = 45_000) {
-        self.targetSegmentDurationMs = max(1, targetSegmentDurationMs)
-    }
-
-    public func planWindows(totalDurationMs: Int) -> [SegmentWindow] {
-        guard totalDurationMs > 0 else { return [] }
-        var windows: [SegmentWindow] = []
-        var start = 0
-        var index = 0
-        while start < totalDurationMs {
-            let duration = min(targetSegmentDurationMs, totalDurationMs - start)
-            windows.append(SegmentWindow(index: index, startedAtMs: start, durationMs: duration))
-            start += duration
-            index += 1
-        }
-        return windows
-    }
-}
-
 /// Stateful segment planner for live meeting capture. The recorder asks for
 /// the next segment's file URL, closes the current segment at (or after) the
 /// target duration, and receives closed-segment metadata for upload.

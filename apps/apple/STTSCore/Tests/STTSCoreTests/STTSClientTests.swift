@@ -460,7 +460,7 @@ final class STTSClientTests: XCTestCase {
         XCTAssertEqual(object["format"] as? String, "audio/mpeg")
     }
 
-    func testSynthesizeRejectsNonAudioResponse() async throws {
+    func testSynthesizeSurfacesWorkerErrorCode() async throws {
         let response = try jsonResponse(["code": "RESPONSE_NOT_FOUND"], status: 404)
         let client = makeClient { _ in response }
         let command = SynthesizeResponseCommand(conversationId: "conv-1", responseId: "resp-1")

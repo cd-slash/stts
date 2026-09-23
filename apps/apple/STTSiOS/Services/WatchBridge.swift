@@ -119,6 +119,19 @@ final class WatchBridge: NSObject, WCSessionDelegate, ObservableObject {
         }
     }
 
+    /// Queued delivery path: the watch falls back to `transferUserInfo` when
+    /// the phone is unreachable, so commands must also be handled here or they
+    /// are accepted and silently discarded.
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        let command = userInfo["command"] as? String
+        let label = userInfo["label"] as? String
+        Task { @MainActor in
+            guard let command else { return }
+            self.dispatch(command: command, label: label)
+            self.pushState()
+        }
+    }
+
     nonisolated func session(_ session: WCSession, didReceive file: WCSessionFile) {
         // Incoming files are temporary; copy before the callback returns.
         guard (file.metadata?["kind"] as? String) == "voice-note" else { return }

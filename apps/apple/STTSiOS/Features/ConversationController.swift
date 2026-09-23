@@ -63,8 +63,14 @@ final class ConversationController: ObservableObject {
     /// submits the text as one turn. On transcription failure the file is
     /// retained for retry or discard.
     func submitVoiceNote(at url: URL) {
-        guard !isBusy else { return }
+        // Keep the file reachable even when a turn is already running, so a
+        // watch handover is never silently dropped; the retry control picks it
+        // up once the current turn finishes.
         pendingVoiceNoteURL = url
+        guard !isBusy else {
+            phase = .failed("Busy")
+            return
+        }
         runTask?.cancel()
         runTask = Task { await transcribeAndSubmit() }
     }
@@ -273,11 +279,15 @@ final class ConversationController: ObservableObject {
         activeRunId = nil
         phase = .idle
         Task {
-            _ = try? await client.interruptRun(
+            // The interrupt response rotates the handle; retaining it keeps the
+            // stored conversation current, as the web client does.
+            if let rotated = try? await client.interruptRun(
                 conversationId: conversationId,
                 runId: runId,
                 reason: .userCancelled
-            )
+            ) {
+                self.conversationId = rotated
+            }
         }
     }
 

@@ -16,16 +16,3 @@ public struct SegmentMetadata: Codable, Sendable, Equatable {
         self.fileURL = fileURL
     }
 }
-
-/// A planned time window within a bounded voice note.
-public struct SegmentWindow: Codable, Sendable, Equatable {
-    public var index: Int
-    public var startedAtMs: Int
-    public var durationMs: Int
-
-    public init(index: Int, startedAtMs: Int, durationMs: Int) {
-        self.index = index
-        self.startedAtMs = startedAtMs
-        self.durationMs = durationMs
-    }
-}

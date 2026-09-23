@@ -2,32 +2,6 @@ import XCTest
 @testable import STTSCore
 
 final class SegmenterTests: XCTestCase {
-    // MARK: VoiceNoteSegmenter
-
-    func testVoiceNoteSingleWindowUnderTarget() {
-        let segmenter = VoiceNoteSegmenter(targetSegmentDurationMs: 45_000)
-        let windows = segmenter.planWindows(totalDurationMs: 30_000)
-
-        XCTAssertEqual(windows, [SegmentWindow(index: 0, startedAtMs: 0, durationMs: 30_000)])
-    }
-
-    func testVoiceNoteWindowsSplitAtTarget() {
-        let segmenter = VoiceNoteSegmenter(targetSegmentDurationMs: 45_000)
-        let windows = segmenter.planWindows(totalDurationMs: 100_000)
-
-        XCTAssertEqual(windows, [
-            SegmentWindow(index: 0, startedAtMs: 0, durationMs: 45_000),
-            SegmentWindow(index: 1, startedAtMs: 45_000, durationMs: 45_000),
-            SegmentWindow(index: 2, startedAtMs: 90_000, durationMs: 10_000)
-        ])
-    }
-
-    func testVoiceNoteZeroAndNegativeDurations() {
-        let segmenter = VoiceNoteSegmenter(targetSegmentDurationMs: 45_000)
-        XCTAssertTrue(segmenter.planWindows(totalDurationMs: 0).isEmpty)
-        XCTAssertTrue(segmenter.planWindows(totalDurationMs: -5).isEmpty)
-    }
-
     // MARK: MeetingSegmenter
 
     func testMeetingSegmentLifecycleAndIndexes() {
@@ -77,6 +51,5 @@ final class SegmenterTests: XCTestCase {
 
     func testDefaultTargetIsFortyFiveSeconds() {
         XCTAssertEqual(MeetingSegmenter().targetSegmentDurationMs, 45_000)
-        XCTAssertEqual(VoiceNoteSegmenter().targetSegmentDurationMs, 45_000)
     }
 }

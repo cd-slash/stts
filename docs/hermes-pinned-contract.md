@@ -55,7 +55,7 @@ The dashboard client connects to `/api/ws`. Each WebSocket text frame is one JSO
 |---|---|---|
 | `session.create` | Create a runtime and durable session | request `profile`, `source`, optional `close_on_disconnect`; result `session_id`, `stored_session_id` |
 | `session.resume` | Reattach to stored history | request `session_id`, optional `profile`; result includes new runtime `session_id` |
-| `prompt.submit` | Start a turn | `session_id`, `text`; result status `streaming` |
+| `prompt.submit` | Start a turn | `session_id`, `text`, `surface`; result status `streaming` |
 | `session.interrupt` | Interrupt active work | `session_id`; result status `interrupted` |
 | `session.events.since` | Replay missed events | `session_id`, `last_seen`; result `events`, replay epoch/truncation metadata |
 | `clarify.respond` | Answer a clarification card | session and request correlation plus `answer` |
