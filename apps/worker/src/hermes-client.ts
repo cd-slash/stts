@@ -125,7 +125,7 @@ export class HermesRpcClient {
       clean: event.wasClean,
       stage: this.stage
     });
-    this.fail(new HermesTransportError("Agent connection closed", true));
+    this.fail(new HermesTransportError(`Agent connection closed (${this.stage})`, true));
   };
   private readonly onError = () => {
     console.error("hermes_websocket_error");
