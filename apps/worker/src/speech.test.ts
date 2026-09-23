@@ -33,7 +33,7 @@ describe("OpenAI-compatible speech adapter", () => {
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "https://speech.example.com/v1/audio/transcriptions",
-      expect.objectContaining({ method: "POST", redirect: "error" })
+      expect.objectContaining({ method: "POST", redirect: "manual" })
     );
   });
 

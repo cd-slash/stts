@@ -91,7 +91,7 @@ export class OpenAiSpeechAdapter implements SpeechAdapter {
         method: "POST",
         headers: this.headers(),
         body: form,
-        redirect: "error",
+        redirect: "manual",
         signal: AbortSignal.timeout(this.timeoutMs)
       });
     } catch (error) {
@@ -139,7 +139,7 @@ export class OpenAiSpeechAdapter implements SpeechAdapter {
           response_format: options.format,
           speed: options.speed ?? 1
         }),
-        redirect: "error",
+        redirect: "manual",
         signal: AbortSignal.timeout(this.timeoutMs)
       });
     } catch (error) {
