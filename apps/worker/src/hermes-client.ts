@@ -89,6 +89,7 @@ export class HermesRpcClient {
   private readyReject!: (error: Error) => void;
   private nextId = 0;
   private closed = false;
+  private stage = "connected";
 
   constructor(
     private readonly socket: WebSocket,
@@ -121,7 +122,8 @@ export class HermesRpcClient {
     console.error("hermes_websocket_closed", {
       code: event.code,
       reason: event.reason.slice(0, 120),
-      clean: event.wasClean
+      clean: event.wasClean,
+      stage: this.stage
     });
     this.fail(new HermesTransportError("Agent connection closed", true));
   };
@@ -152,7 +154,10 @@ export class HermesRpcClient {
 
     if (frame.method === "event") {
       const event = object(frame.params) as unknown as HermesEvent;
-      if (event.type === "gateway.ready") this.readyResolve();
+      if (event.type === "gateway.ready") {
+        this.stage = "ready";
+        this.readyResolve();
+      }
       if (typeof event.type === "string") {
         for (const listener of this.eventListeners) listener(event);
       }
@@ -163,6 +168,7 @@ export class HermesRpcClient {
     const pending = this.pending.get(frame.id);
     if (!pending) return;
     this.pending.delete(frame.id);
+    this.stage = frame.error ? "rpc-error" : "rpc-response";
     clearTimeout(pending.timer);
     if (frame.error) {
       pending.reject(new HermesTransportError("Agent request failed", true));
@@ -186,6 +192,7 @@ export class HermesRpcClient {
   call(method: string, params: Record<string, unknown>): Promise<unknown> {
     if (this.closed) return Promise.reject(new HermesTransportError("Agent connection closed", true));
     const id = `stts-${++this.nextId}`;
+    this.stage = `request:${method}`;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
