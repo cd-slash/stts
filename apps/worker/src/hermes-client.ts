@@ -117,11 +117,25 @@ export class HermesRpcClient {
     this.failureListeners.clear();
   }
 
-  private readonly onClose = () => this.fail(new HermesTransportError("Agent connection closed", true));
-  private readonly onError = () => this.fail(new HermesTransportError("Agent connection failed", true));
+  private readonly onClose = (event: CloseEvent) => {
+    console.error("hermes_websocket_closed", {
+      code: event.code,
+      reason: event.reason.slice(0, 120),
+      clean: event.wasClean
+    });
+    this.fail(new HermesTransportError("Agent connection closed", true));
+  };
+  private readonly onError = () => {
+    console.error("hermes_websocket_error");
+    this.fail(new HermesTransportError("Agent connection failed", true));
+  };
 
   private readonly onMessage = (message: MessageEvent) => {
     if (typeof message.data !== "string" || message.data.length > MAX_FRAME_BYTES) {
+      console.error("hermes_websocket_invalid_frame", {
+        kind: typeof message.data,
+        size: typeof message.data === "string" ? message.data.length : -1
+      });
       this.fail(new HermesTransportError("Invalid agent response", true));
       this.socket.close(1009, "invalid frame");
       return;
