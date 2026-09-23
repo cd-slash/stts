@@ -82,8 +82,11 @@ export class HermesTransport {
         redirect: "manual",
         signal: AbortSignal.timeout(this.timeoutMs)
       });
-    } catch {
-      console.error("hermes_bootstrap_fetch_failed");
+    } catch (error) {
+      console.error("hermes_bootstrap_fetch_failed", {
+        name: error instanceof Error ? error.name : "unknown",
+        message: error instanceof Error ? error.message.slice(0, 200) : "unknown"
+      });
       throw new HermesTransportError("Agent authentication unavailable", true);
     }
     if (!response.ok) {
