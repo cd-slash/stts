@@ -34,6 +34,21 @@ describe("opaque conversation state", () => {
     });
   });
 
+  it("preserves a stable response binding across handle rotation", async () => {
+    const codec = new ConversationStateCodec(env);
+    const first = await codec.seal(
+      { profile: "default", conversationKey: "stable-key" },
+      "owner-1"
+    );
+    const state = await codec.open(first, "owner-1");
+    const second = await codec.seal({ ...state, storedSessionId: "stored-session" }, "owner-1");
+
+    expect(second).not.toBe(first);
+    await expect(codec.open(second, "owner-1")).resolves.toMatchObject({
+      conversationKey: "stable-key"
+    });
+  });
+
   it("rejects use by another identity", async () => {
     const codec = new ConversationStateCodec(env);
     const token = await codec.seal({ profile: "default" }, "owner-1");

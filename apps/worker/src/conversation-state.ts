@@ -4,6 +4,7 @@ interface StoredConversationState {
   v: 1;
   u: string;
   p: string;
+  i?: string;
   s?: string;
   r?: string;
   k?: "approval" | "clarification";
@@ -12,6 +13,7 @@ interface StoredConversationState {
 
 export interface ConversationState {
   profile: string;
+  conversationKey?: string;
   storedSessionId?: string;
   pendingInput?: {
     requestId: string;
@@ -90,6 +92,7 @@ export class ConversationStateCodec {
       v: 1,
       u: await subjectFingerprint(subject),
       p: state.profile,
+      ...(state.conversationKey ? { i: state.conversationKey } : {}),
       ...(state.storedSessionId ? { s: state.storedSessionId } : {}),
       ...(state.pendingInput
         ? {
@@ -133,6 +136,7 @@ export class ConversationStateCodec {
     if (state.u !== (await subjectFingerprint(subject))) throw new Error("invalid conversation");
     return {
       profile: state.p,
+      ...(state.i ? { conversationKey: state.i } : {}),
       ...(state.s ? { storedSessionId: state.s } : {}),
       ...(state.r && state.k
         ? {

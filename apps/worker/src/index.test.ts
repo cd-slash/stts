@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ResponseStateCodec } from "./response-state";
+import { ConversationStateCodec } from "./conversation-state";
 import app from "./index";
 
 const env = {
@@ -170,9 +171,14 @@ describe("worker API", () => {
       SPEECH_BASE_URL: "https://speech.example.com",
       SPEECH_API_KEY: "synthetic-key"
     };
+    const conversationKey = "stable-conversation-key";
+    const conversationId = await new ConversationStateCodec(liveEnv).seal(
+      { profile: "default", conversationKey },
+      "local-owner"
+    );
     const responseId = await new ResponseStateCodec(liveEnv).seal(
       "Authoritative response",
-      "conv_1",
+      conversationKey,
       "local-owner"
     );
     const fetcher = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
@@ -188,7 +194,7 @@ describe("worker API", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           operationId: "op_speech",
-          conversationId: "conv_1",
+          conversationId,
           responseId,
           voice: "default",
           format: "audio/mpeg"

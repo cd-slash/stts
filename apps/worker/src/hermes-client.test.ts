@@ -12,6 +12,11 @@ class FakeHermesSocket extends EventTarget {
   readonly requests: Array<{ id: string; method: string; params: Record<string, unknown> }> = [];
   private sequence = 0;
 
+  constructor(private readonly staleCompletedSequence?: number) {
+    super();
+    if (staleCompletedSequence) this.sequence = staleCompletedSequence;
+  }
+
   accept() {
     queueMicrotask(() => this.event({ type: "gateway.ready", payload: { replay_epoch: "epoch-1" } }));
   }
@@ -34,6 +39,14 @@ class FakeHermesSocket extends EventTarget {
       }
       if (request.method === "prompt.submit") {
         const sessionId = String(request.params.session_id);
+        if (this.staleCompletedSequence) {
+          this.event({
+            type: "message.complete",
+            session_id: sessionId,
+            seq: this.staleCompletedSequence,
+            payload: { text: "Stale response", status: "complete" }
+          });
+        }
         this.event({ type: "message.start", session_id: sessionId, seq: ++this.sequence });
         this.event({
           type: "message.delta",
@@ -47,6 +60,12 @@ class FakeHermesSocket extends EventTarget {
           session_id: sessionId,
           seq: ++this.sequence,
           payload: { text: "Hello there", status: "complete" }
+        });
+        return;
+      }
+      if (request.method === "session.events.since") {
+        this.reply(request.id, {
+          events: this.staleCompletedSequence ? [{ seq: this.staleCompletedSequence }] : []
         });
         return;
       }
@@ -138,7 +157,27 @@ describe("Hermes turn lifecycle", () => {
       method: "session.resume",
       params: { session_id: "stored-secret", profile: "default", defer_history: true }
     });
+    expect(socket.requests.map((request) => request.method)).toEqual([
+      "session.resume",
+      "session.interrupt",
+      "session.events.since",
+      "prompt.submit"
+    ]);
     expect(result.storedSessionId).toBe("stored-secret");
+  });
+
+  it("ignores completed events at or below the pre-submit sequence watermark", async () => {
+    const socket = new FakeHermesSocket(7);
+    const provider: HermesSocketProvider = { connect: async () => socket as unknown as WebSocket };
+    const result = await runHermesTurn(
+      env,
+      { profile: "default", storedSessionId: "stored-secret" },
+      command,
+      provider
+    );
+
+    expect(result.events.at(-1)?.data.text).toBe("Hello there");
+    expect(JSON.stringify(result.events)).not.toContain("Stale response");
   });
 
   it("resumes and resolves a pending approval", async () => {
@@ -167,9 +206,10 @@ describe("Hermes turn lifecycle", () => {
 
     expect(socket.requests.map((request) => request.method)).toEqual([
       "session.resume",
+      "session.events.since",
       "approval.respond"
     ]);
-    expect(socket.requests[1]?.params).toMatchObject({
+    expect(socket.requests[2]?.params).toMatchObject({
       request_id: "approval-request",
       choice: "once",
       all: false

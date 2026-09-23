@@ -1,3 +1,4 @@
 AUTH_MODE=local
 SPEECH_MODE=mock
 AGENT_MODE=mock
+CONVERSATION_STATE_KEY=replace-with-32-byte-base64url-key

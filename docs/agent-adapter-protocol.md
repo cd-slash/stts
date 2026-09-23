@@ -10,7 +10,7 @@ This document is the initial contract. Concrete endpoint schemas should be gener
 
 - IDs are opaque strings.
 - Times are RFC 3339 UTC strings.
-- Commands are idempotent by `operationId`.
+- `operationId` is the correlation key. Durable idempotency is required before automatic command retries are enabled.
 - Events have a unique `eventId` and monotonically ordered opaque `cursor` within a conversation.
 - Additive fields and new event types are versioned compatibility changes.
 - Unknown events may be ignored only when marked non-critical.
@@ -119,7 +119,7 @@ HTTP mapping:
 POST /api/conversations/{conversationId}/runs/{runId}/interrupt
 ```
 
-The Worker validates the owner-bound conversation handle, resumes its durable Hermes session, and calls `session.interrupt` with the current runtime session ID. The response contains `run.interrupting` followed by either `run.interrupted` or `run.interrupt_failed`; upstream session IDs remain excluded.
+The Worker validates the owner-bound conversation handle, resumes its durable Hermes session, and calls `session.interrupt` with the current runtime session ID. Hermes interruption is session-level; `runId` remains client correlation metadata and is not forwarded upstream. The response contains `run.interrupting` followed by either `run.interrupted` or `run.interrupt_failed`; upstream session IDs remain excluded.
 
 ### Synthesize response
 
@@ -133,7 +133,7 @@ The Worker validates the owner-bound conversation handle, resumes its durable He
 }
 ```
 
-The BFF resolves text by `responseId`. Clients do not send arbitrary text for privileged synthesis. The current stateless implementation uses an AES-GCM token bound to the Access subject and current conversation handle, containing the completed response text and a short expiry. `POST /api/speech/synthesis` validates the token before calling Kokoro and streams only safe audio headers back to the client.
+The BFF resolves text by `responseId`. Clients do not send arbitrary text for privileged synthesis. The current stateless implementation uses an AES-GCM token bound to the Access subject and a stable random key inside the rotating conversation handle, containing the completed response text and a short expiry. `POST /api/speech/synthesis` validates the token before calling Kokoro and streams only safe audio headers back to the client.
 
 ## Events
 

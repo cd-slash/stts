@@ -28,6 +28,12 @@ const usesWorker = import.meta.env.VITE_BACKEND === "worker";
 export const backendLabel = usesWorker ? "Worker" : "Mock";
 const conversationStorageKey = "stts.conversation.v1";
 
+class ApiError extends Error {
+  constructor(readonly code: string) {
+    super("Request failed");
+  }
+}
+
 function restoredConversation(): string | undefined {
   if (!usesWorker) return undefined;
   try {
@@ -38,7 +44,14 @@ function restoredConversation(): string | undefined {
   }
 }
 
-function retainConversation(value: string): void {
+let currentConversationId: string | undefined;
+let nextMutation = 0;
+let retainedMutation = 0;
+
+function retainConversation(value: string, mutation = retainedMutation): void {
+  if (mutation < retainedMutation) return;
+  retainedMutation = mutation;
+  currentConversationId = value;
   conversation = Promise.resolve(value);
   try {
     window.localStorage.setItem(conversationStorageKey, value);
@@ -47,8 +60,21 @@ function retainConversation(value: string): void {
   }
 }
 
+function clearConversation(value: string, mutation: number): void {
+  if (currentConversationId !== value || mutation < retainedMutation) return;
+  currentConversationId = undefined;
+  conversation = undefined;
+  hasDurableConversation = false;
+  try {
+    window.localStorage.removeItem(conversationStorageKey);
+  } catch {
+    // In-memory state is still cleared when storage is blocked.
+  }
+}
+
 const restored = restoredConversation();
 let conversation: Promise<string> | undefined = restored ? Promise.resolve(restored) : undefined;
+currentConversationId = restored;
 let activeAudio: HTMLAudioElement | undefined;
 let activeAudioUrl: string | undefined;
 const audioCache = new Map<string, Blob>();
@@ -58,7 +84,13 @@ let activeTurn: { runId: string; controller: AbortController } | undefined;
 
 async function parseJson(response: Response): Promise<unknown> {
   const body = await response.json().catch(() => null);
-  if (!response.ok) throw new Error("Request failed");
+  if (!response.ok) {
+    const code =
+      body && typeof body === "object" && "code" in body && typeof body.code === "string"
+        ? body.code
+        : "REQUEST_FAILED";
+    throw new ApiError(code);
+  }
   return body;
 }
 
@@ -108,15 +140,15 @@ export async function transcribeVoiceNote(audio: Blob): Promise<string> {
   return "Summarize my next priorities.";
 }
 
-function agentResult(body: unknown): AgentResult {
+function agentResult(body: unknown, mutation: number): AgentResult {
   if (!body || typeof body !== "object" || !("events" in body)) throw new Error("Invalid response");
   if (!("conversationId" in body) || typeof body.conversationId !== "string") {
     throw new Error("Invalid response");
   }
-  retainConversation(body.conversationId);
-  hasDurableConversation = true;
   const parsed = eventEnvelope.array().safeParse(body.events);
   if (!parsed.success) throw new Error("Invalid response");
+  retainConversation(body.conversationId, mutation);
+  hasDurableConversation = true;
   const completed = parsed.data.slice().reverse().find((event) => event.type === "response.completed");
   const responseText = completed?.data.text;
   if (typeof responseText === "string") {
@@ -157,23 +189,35 @@ export async function submitTurn(text: string): Promise<AgentResult> {
     const controller = new AbortController();
     activeTurn = { runId, controller };
     try {
-      const id = await conversationId();
-      const body = await fetch(`/api/conversations/${encodeURIComponent(id)}/turns`, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          operationId: runId,
-          input: { kind: "text", text },
-          profileOverride: null,
-          clientContext: {
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            locale: navigator.language
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const id = await conversationId();
+        const mutation = ++nextMutation;
+        try {
+          const body = await fetch(`/api/conversations/${encodeURIComponent(id)}/turns`, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "content-type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify({
+              operationId: runId,
+              input: { kind: "text", text },
+              profileOverride: null,
+              clientContext: {
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                locale: navigator.language
+              }
+            })
+          }).then(parseJson);
+          return agentResult(body, mutation);
+        } catch (error) {
+          if (attempt === 0 && error instanceof ApiError && error.code === "INVALID_REQUEST") {
+            clearConversation(id, mutation);
+            continue;
           }
-        })
-      }).then(parseJson);
-      return agentResult(body);
+          throw error;
+        }
+      }
+      throw new Error("Request failed");
     } catch (error) {
       if (controller.signal.aborted) return { kind: "interrupted" };
       throw error;
@@ -195,6 +239,7 @@ export async function interruptActiveTurn(): Promise<boolean> {
   if (!usesWorker || !hasDurableConversation || !activeTurn) return false;
   const turn = activeTurn;
   const id = await conversationId();
+  const mutation = ++nextMutation;
   const body = await fetch(
     `/api/conversations/${encodeURIComponent(id)}/runs/${encodeURIComponent(turn.runId)}/interrupt`,
     {
@@ -208,7 +253,7 @@ export async function interruptActiveTurn(): Promise<boolean> {
     throw new Error("Invalid response");
   }
   if (typeof body.conversationId !== "string") throw new Error("Invalid response");
-  retainConversation(body.conversationId);
+  retainConversation(body.conversationId, mutation);
   turn.controller.abort();
   if (activeTurn?.runId === turn.runId) activeTurn = undefined;
   return true;
@@ -219,6 +264,7 @@ export async function answerInput(
   answer: { kind: "text"; text: string } | { kind: "approve" | "deny"; confirmationNonce?: string }
 ): Promise<AgentResult> {
   const id = await conversationId();
+  const mutation = ++nextMutation;
   const body = await fetch(
     `/api/conversations/${encodeURIComponent(id)}/inputs/${encodeURIComponent(input.requestId)}/answer`,
     {
@@ -228,7 +274,7 @@ export async function answerInput(
       body: JSON.stringify({ operationId: crypto.randomUUID(), answer })
     }
   ).then(parseJson);
-  return agentResult(body);
+  return agentResult(body, mutation);
 }
 
 export function speakLocal(text: string): void {
@@ -293,5 +339,10 @@ export async function playResponse(text: string, responseId?: string): Promise<v
   };
   audio.addEventListener("ended", cleanup, { once: true });
   audio.addEventListener("error", cleanup, { once: true });
-  await audio.play();
+  try {
+    await audio.play();
+  } catch (error) {
+    cleanup();
+    throw error;
+  }
 }

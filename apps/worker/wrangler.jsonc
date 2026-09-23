@@ -3,6 +3,14 @@
   "name": "stts-bff",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-22",
+  "routes": [
+    { "pattern": "stts.cdslash.com", "custom_domain": true }
+  ],
+  "assets": {
+    "directory": "../web/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
   "vars": {
     "AUTH_MODE": "access",
     "SPEECH_MODE": "live",

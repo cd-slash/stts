@@ -8,6 +8,7 @@ import {
 import { Hono } from "hono";
 import { AgentAdapterError, createAgentAdapter } from "./agent";
 import { requireIdentity, type Bindings, type Variables } from "./auth";
+import { ConversationStateCodec } from "./conversation-state";
 import { ResponseStateCodec } from "./response-state";
 import { createSpeechAdapter, SpeechAdapterError } from "./speech";
 
@@ -41,6 +42,13 @@ app.post("/api/conversations", async (context) => {
 });
 
 app.post("/api/transcriptions", async (context) => {
+  const declaredLength = Number(context.req.header("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > 21 * 1024 * 1024) {
+    return context.json(
+      { code: "PAYLOAD_TOO_LARGE", message: "Voice note too large", retryable: false },
+      413
+    );
+  }
   const form = await context.req.formData();
   const audio = form.get("audio");
   const operationId = form.get("operationId");
@@ -80,9 +88,14 @@ app.post("/api/speech/synthesis", async (context) => {
 
   let text: string;
   try {
+    const conversation = await new ConversationStateCodec(context.env).open(
+      parsed.data.conversationId,
+      context.get("subject")
+    );
+    if (!conversation.conversationKey) throw new Error("invalid conversation");
     text = await new ResponseStateCodec(context.env).open(
       parsed.data.responseId,
-      parsed.data.conversationId,
+      conversation.conversationKey,
       context.get("subject")
     );
   } catch {

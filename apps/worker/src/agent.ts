@@ -144,7 +144,7 @@ class HermesAgentAdapter implements AgentAdapter {
 
   private async bindResponses(
     events: EventEnvelope[],
-    conversationId: string,
+    conversationKey: string,
     subject: string
   ): Promise<void> {
     await Promise.all(
@@ -152,7 +152,7 @@ class HermesAgentAdapter implements AgentAdapter {
         if (event.type !== "response.completed" || typeof event.data.text !== "string") return;
         event.data = {
           ...event.data,
-          responseId: await this.responses.seal(event.data.text, conversationId, subject)
+          responseId: await this.responses.seal(event.data.text, conversationKey, subject)
         };
       })
     );
@@ -161,8 +161,12 @@ class HermesAgentAdapter implements AgentAdapter {
   async createConversation(profile: string, subject: string): Promise<ConversationHandle> {
     const normalizedProfile = hermesProfile(profile);
     try {
+      const stableConversationKey = nonce();
       return {
-        conversationId: await this.state.seal({ profile: normalizedProfile }, subject),
+        conversationId: await this.state.seal(
+          { profile: normalizedProfile, conversationKey: stableConversationKey },
+          subject
+        ),
         profile
       };
     } catch {
@@ -173,6 +177,7 @@ class HermesAgentAdapter implements AgentAdapter {
   async submitTurn(command: SubmitTurnCommand, subject: string): Promise<TurnResult> {
     try {
       const state = await this.state.open(command.conversationId, subject);
+      const stableConversationKey = state.conversationKey ?? nonce();
       if (command.profileOverride && hermesProfile(command.profileOverride) !== state.profile) {
         throw new AgentAdapterError("Profile change unavailable", false, 400, "INVALID_REQUEST");
       }
@@ -181,12 +186,13 @@ class HermesAgentAdapter implements AgentAdapter {
       const conversationId = await this.state.seal(
         {
           profile: state.profile,
+          conversationKey: stableConversationKey,
           storedSessionId: result.storedSessionId,
           ...(pending ? { pendingInput: pending } : {})
         },
         subject
       );
-      await this.bindResponses(result.events, conversationId, subject);
+      await this.bindResponses(result.events, stableConversationKey, subject);
       return {
         conversationId,
         events: result.events
@@ -206,6 +212,7 @@ class HermesAgentAdapter implements AgentAdapter {
   async answerInput(command: AnswerInputCommand, subject: string): Promise<TurnResult> {
     try {
       const state = await this.state.open(command.conversationId, subject);
+      const stableConversationKey = state.conversationKey ?? nonce();
       const pending = state.pendingInput;
       if (!state.storedSessionId || !pending || pending.requestId !== command.requestId) {
         throw new AgentAdapterError("Input request unavailable", false, 409, "INPUT_EXPIRED");
@@ -233,12 +240,13 @@ class HermesAgentAdapter implements AgentAdapter {
       const conversationId = await this.state.seal(
         {
           profile: state.profile,
+          conversationKey: stableConversationKey,
           storedSessionId: result.storedSessionId,
           ...(nextPending ? { pendingInput: nextPending } : {})
         },
         subject
       );
-      await this.bindResponses(result.events, conversationId, subject);
+      await this.bindResponses(result.events, stableConversationKey, subject);
       return {
         conversationId,
         events: result.events

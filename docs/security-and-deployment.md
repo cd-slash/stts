@@ -57,11 +57,13 @@ Conversation handles are encrypted and authenticated with AES-GCM, bind to a tru
 
 The PWA may retain the opaque handle in local storage to continue after reload. It does not store transcript text, audio, credentials, raw Hermes identifiers, approval secrets outside the encrypted handle, or an authorization grant. Clearing site data removes local continuation state; Hermes remains the transcript authority.
 
-Completed-response IDs use the same key with separate authenticated context. They bind the final text to both Access subject and current conversation handle and expire after `RESPONSE_TOKEN_TTL_SECONDS`. This allows stateless TTS lookup without accepting arbitrary synthesis text or storing response audio.
+Completed-response IDs use the same key with separate authenticated context. They bind the final text to both Access subject and a stable random conversation key carried inside each rotating handle, and expire after `RESPONSE_TOKEN_TTL_SECONDS`. This allows replay after later turns without accepting arbitrary synthesis text or storing response audio.
 
 The Worker verifies the Access assertion's RS256 signature against the issuer JWKS and validates issuer, audience, expiry, activation time, and subject. Committed configuration defaults to Access authentication and live adapters; missing bindings fail closed. The local bypass is accepted only when an explicit ignored `.dev.vars` file sets `AUTH_MODE=local`.
 
 ## Request controls
+
+The list below is the production target. Route and schema allowlists, bounded uploads, filename normalization, text limits, deadlines, and upstream method allowlists are implemented. Durable idempotency and subject-level rate limiting remain required before general availability.
 
 - Allow only expected HTTP methods, routes, media types, and origins.
 - Apply audio byte and duration limits before forwarding.

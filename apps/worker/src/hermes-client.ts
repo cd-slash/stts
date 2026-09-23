@@ -69,6 +69,17 @@ function sessionResult(value: unknown, requireStored: boolean): SessionResult {
   };
 }
 
+function replayCheckpoint(value: unknown): number {
+  const events = object(value).events;
+  if (!Array.isArray(events)) return 0;
+  return events.reduce((latest, candidate) => {
+    const sequence = object(candidate).seq;
+    return typeof sequence === "number" && Number.isSafeInteger(sequence)
+      ? Math.max(latest, sequence)
+      : latest;
+  }, 0);
+}
+
 export class HermesRpcClient {
   private readonly pending = new Map<string, PendingRequest>();
   private readonly eventListeners = new Set<(event: HermesEvent) => void>();
@@ -180,7 +191,8 @@ export class HermesRpcClient {
   collectTurn(
     sessionId: string,
     command: SubmitTurnCommand,
-    timeoutMs: number
+    timeoutMs: number,
+    sequenceWatermark = 0
   ): { promise: Promise<EventEnvelope[]>; cancel(): void } {
     const events: EventEnvelope[] = [];
     let timer: ReturnType<typeof setTimeout>;
@@ -192,6 +204,8 @@ export class HermesRpcClient {
     };
     const listener = (event: HermesEvent) => {
       if (event.session_id !== sessionId) return;
+      if (!Number.isSafeInteger(event.seq) || event.seq! <= sequenceWatermark) return;
+      sequenceWatermark = event.seq!;
       const normalized = normalizeHermesEvent(event, {
         conversationId: command.conversationId,
         correlationId: command.operationId,
@@ -263,7 +277,17 @@ export async function runHermesTurn(
           true
         );
     const storedSessionId = state.storedSessionId ?? session.stored_session_id!;
-    collector = client.collectTurn(session.session_id, command, timeoutMs);
+    let sequenceWatermark = 0;
+    if (state.storedSessionId) {
+      await client.call("session.interrupt", { session_id: session.session_id });
+      sequenceWatermark = replayCheckpoint(
+        await client.call("session.events.since", {
+          session_id: session.session_id,
+          last_seen: 0
+        })
+      );
+    }
+    collector = client.collectTurn(session.session_id, command, timeoutMs, sequenceWatermark);
     await client.call("prompt.submit", {
       session_id: session.session_id,
       text: command.input.text,
@@ -299,6 +323,12 @@ export async function runHermesInputResponse(
       }),
       false
     );
+    const sequenceWatermark = replayCheckpoint(
+      await client.call("session.events.since", {
+        session_id: session.session_id,
+        last_seen: 0
+      })
+    );
     collector = client.collectTurn(
       session.session_id,
       {
@@ -308,7 +338,8 @@ export async function runHermesInputResponse(
         profileOverride: null,
         clientContext: { timezone: "UTC", locale: "en" }
       },
-      turnTimeout(env)
+      turnTimeout(env),
+      sequenceWatermark
     );
 
     const method = state.pendingInput?.kind === "approval" ? "approval.respond" : "clarify.respond";

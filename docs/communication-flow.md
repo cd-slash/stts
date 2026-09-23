@@ -27,7 +27,7 @@ sequenceDiagram
     H->>C: Hermes prompt submission
     C-->>H: Message/tool/specialist events
     H-->>B: Normalized events
-    B-->>P: Stream events
+    B-->>P: Return collected events
     C-->>H: Final coordinator response
     H-->>B: response.completed
     B-->>P: response.completed
@@ -82,7 +82,7 @@ Failure states retain enough state to retry only the failed phase. For example, 
 
 ## Streaming presentation
 
-The transcript is event-driven:
+The transcript model is event-driven. The current preview returns each collected turn as one bounded HTTP response; resumable browser streaming remains roadmap work.
 
 - User text appears after transcription and is marked pending until agent acceptance.
 - Coordinator text can appear progressively.
@@ -129,12 +129,14 @@ Rules:
 Playback and execution are separate:
 
 - **Stop playback** affects only local audio.
-- **Interrupt run** sends an idempotent cancellation command for the active operation.
+- **Interrupt run** sends a session-level cancellation command correlated to the active client operation.
 - **Redirect** interrupts an active run, waits for cancellation acknowledgement or a bounded timeout, and then submits the new turn with explicit relation to the interrupted run.
 
 When the user records while audio is playing, local playback stops immediately. Agent work is interrupted only if it is still active.
 
 ## Reconnection and replay
+
+This section defines the target reconnection flow. The preview checkpoints Hermes replay sequence numbers before each resumed command and rejects stale events, but browser event-stream resume and transcript hydration are not yet implemented.
 
 1. The client reconnects with conversation ID and last applied cursor.
 2. The BFF validates access again.
@@ -145,6 +147,8 @@ When the user records while audio is playing, local playback stops immediately. 
 The client never resubmits a turn merely because the event connection dropped.
 
 ## Retry semantics
+
+These are target semantics. The preview does not automatically retry agent commands; durable operation-ID deduplication remains roadmap work.
 
 | Failure | Retry unit | Idempotency key |
 |---|---|---|
