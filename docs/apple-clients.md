@@ -106,8 +106,8 @@ A meeting in progress is persisted as a draft after every segment outcome, marke
 At launch the client:
 
 1. removes orphaned audio from a previous run — meeting segment directories, relayed reply audio, and transferred watch notes;
-2. promotes any surviving draft into a saved transcript flagged `interrupted`;
-3. deletes the draft once the transcript is saved.
+2. promotes surviving drafts into saved transcripts flagged `interrupted` — one that already has a saved transcript is left alone, and an empty draft with no text and no markers is discarded;
+3. deletes the draft once the transcript is saved, keeping it if that save fails so a later launch can retry.
 
 The saved transcript supersedes its draft, and the client waits for any pending draft write before deleting so a late write cannot resurrect it. Relayed reply audio is removed when its transfer completes.
 

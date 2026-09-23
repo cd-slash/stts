@@ -74,10 +74,20 @@ final class WatchBridge: NSObject, WCSessionDelegate, ObservableObject {
         try? session.updateApplicationContext(context)
     }
 
+    /// Source files of transfers the system has not finished yet. They survive
+    /// a relaunch, so launch-time pruning must not delete them.
+    var outstandingTransferPaths: Set<String> {
+        guard WCSession.isSupported() else { return [] }
+        return Set(
+            WCSession.default.outstandingFileTransfers.map {
+                $0.file.fileURL.standardizedFileURL.path
+            }
+        )
+    }
+
     /// Relays a synthesized coordinator reply to the watch as an audio file.
     /// The watch plays it; the phone also plays it locally.
-    func relayReply(text: String, audio: Data) {
-        guard WCSession.isSupported() else { return }
+    func relayReply(text: String, audio: Data) {        guard WCSession.isSupported() else { return }
         let session = WCSession.default
         guard session.activationState == .activated else { return }
         let url = FileManager.default.temporaryDirectory

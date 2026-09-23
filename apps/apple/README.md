@@ -98,10 +98,13 @@ All configuration lives in the **Settings** tab of the iOS app.
 
 ## Summarize
 
-The transcript browser has an explicit **Summarize** action that submits the
-assembled transcript text to Hermes as a single turn (default profile) and
-plays the reply. Submissions are capped at 40,000 characters; longer
-transcripts are truncated to the most recent 40,000 characters.
+The transcript browser has an explicit **Summarize** action. A transcript up to
+18,000 characters is submitted as a single turn; longer transcripts are split
+into at most 12 lossless chunks (on line boundaries), each submitted as a
+partial-summary turn, followed by one turn that combines the notes into a
+single summary. Chunking preserves every non-whitespace character in order, so
+nothing is silently dropped; only past roughly 216,000 characters is trailing
+content discarded, and the view then shows `Truncated`.
 
 ## Watch app
 

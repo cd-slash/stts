@@ -327,21 +327,40 @@ final class MeetingCoordinator: ObservableObject {
     }
 
     /// Promotes drafts abandoned by a crash or termination into saved
-    /// transcripts, so transcribed text is never lost, then clears them.
+    /// transcripts, so transcribed text is never lost, then clears them. A
+    /// draft is only deleted once its text is safely stored.
     func recoverUnfinishedMeetings() async {
         guard let drafts = try? await store.listDrafts() else { return }
         for draft in drafts {
-            if !draft.assembledText.isEmpty || !draft.markers.isEmpty {
-                try? await store.save(MeetingTranscript(draft: draft))
+            let hasContent = !draft.assembledText.isEmpty || !draft.markers.isEmpty
+            if !hasContent {
+                try? await store.deleteDraft(id: draft.id)
+                continue
             }
-            try? await store.deleteDraft(id: draft.id)
+
+            // A transcript already stored under this id is the finished version.
+            // Promoting the draft would replace it with a worse, interrupted one.
+            let existing = (try? await store.meeting(id: draft.id)) ?? nil
+            if existing != nil {
+                try? await store.deleteDraft(id: draft.id)
+                continue
+            }
+
+            do {
+                try await store.save(MeetingTranscript(draft: draft))
+                try? await store.deleteDraft(id: draft.id)
+            } catch {
+                // Keep the draft so a later launch can retry the promotion.
+                continue
+            }
         }
     }
 
     /// Removes audio left behind by an earlier run: meeting segment
     /// directories, relayed watch replies, and transferred watch notes. Called
-    /// once at launch, before any recording starts.
-    nonisolated static func pruneOrphanedAudio() {
+    /// once at launch, before any recording starts. Paths still in use by an
+    /// outstanding system transfer are preserved.
+    nonisolated static func pruneOrphanedAudio(protecting protectedPaths: Set<String> = []) {
         let manager = FileManager.default
         let temporary = manager.temporaryDirectory
         guard let entries = try? manager.contentsOfDirectory(
@@ -352,10 +371,12 @@ final class MeetingCoordinator: ObservableObject {
         }
         for url in entries {
             let name = url.lastPathComponent
-            if name.hasPrefix("stts-meeting-") || name.hasPrefix("stts-watch-reply-")
-                || name.hasPrefix("stts-watch-note-") {
-                try? manager.removeItem(at: url)
+            guard name.hasPrefix("stts-meeting-") || name.hasPrefix("stts-watch-reply-")
+                || name.hasPrefix("stts-watch-note-") else {
+                continue
             }
+            if protectedPaths.contains(url.standardizedFileURL.path) { continue }
+            try? manager.removeItem(at: url)
         }
     }
 
@@ -379,17 +400,22 @@ final class MeetingCoordinator: ObservableObject {
             assembledText: assembler.assembledText(),
             markers: markers
         )
+        var saved = false
         do {
             try await store.save(meeting)
+            saved = true
         } catch {
             statusMessage = "Save failed"
         }
 
-        // The saved transcript supersedes the draft. Wait for any pending
-        // draft write first so it cannot land after the delete.
+        // Wait for any pending draft write first so it cannot land after the
+        // delete. The draft is only removed once the transcript is safely
+        // stored — otherwise it is the last copy of the transcript.
         _ = await draftTask?.value
         draftTask = nil
-        try? await store.deleteDraft(id: recordingId)
+        if saved {
+            try? await store.deleteDraft(id: recordingId)
+        }
 
         // Meeting audio never persists: drop the whole segment directory.
         if let meetingDirectory {

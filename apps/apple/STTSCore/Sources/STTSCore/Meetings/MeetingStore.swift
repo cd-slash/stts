@@ -48,6 +48,34 @@ public struct MeetingTranscript: Codable, Sendable, Equatable, Identifiable {
         self.interrupted = interrupted
     }
 
+    /// Decoded explicitly so a transcript written before `interrupted` existed
+    /// still loads; the synthesized decoder would ignore the init default and
+    /// fail on the missing key.
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case startedAt
+        case endedAt
+        case durationMs
+        case segments
+        case assembledText
+        case markers
+        case interrupted
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        startedAt = try container.decode(Date.self, forKey: .startedAt)
+        endedAt = try container.decodeIfPresent(Date.self, forKey: .endedAt)
+        durationMs = try container.decode(Int.self, forKey: .durationMs)
+        segments = try container.decode([TranscriptEntry].self, forKey: .segments)
+        assembledText = try container.decode(String.self, forKey: .assembledText)
+        markers = try container.decode([MeetingMarker].self, forKey: .markers)
+        interrupted = try container.decodeIfPresent(Bool.self, forKey: .interrupted) ?? false
+    }
+
     /// Promotes an abandoned draft into a saved transcript.
     public init(draft: MeetingDraft) {
         self.init(

@@ -72,9 +72,32 @@ final class TranscriptChunkerTests: XCTestCase {
         XCTAssertEqual(chunker.chunks(of: text), [text])
     }
 
-    func testDefaultCeilingIsBelowTheInteractiveTurnLimit() {
-        // The protocol allows 50,000 characters for an interactive turn; the
-        // chunk ceiling must stay safely under it.
-        XCTAssertLessThan(TranscriptChunker().maximumCharacters, 50_000)
+    func testDefaultCeilingStaysUnderTheMeetingTurnLimit() {
+        // The protocol allows 100,000 characters for a `meeting-transcript`
+        // turn, and each submitted part also carries a short prompt wrapper.
+        XCTAssertLessThan(TranscriptChunker().maximumCharacters + 500, 100_000)
+    }
+
+    func testMixedFittableWordsAndOverlongTokenAreAllPreserved() {
+        let chunker = TranscriptChunker(maximumCharacters: 12)
+        let text = "short words here " + String(repeating: "y", count: 20) + " trailing words"
+        let chunks = chunker.chunks(of: text)
+
+        for chunk in chunks {
+            XCTAssertLessThanOrEqual(chunk.count, 12)
+        }
+        XCTAssertEqual(nonWhitespace(chunks.joined()), nonWhitespace(text))
+    }
+
+    func testConsecutiveOverlongLinesArePreserved() {
+        let chunker = TranscriptChunker(maximumCharacters: 8)
+        let first = String(repeating: "a", count: 10)
+        let second = String(repeating: "b", count: 9)
+        let chunks = chunker.chunks(of: "\(first)\n\(second)")
+
+        XCTAssertEqual(chunks.joined(), first + second)
+        for chunk in chunks {
+            XCTAssertLessThanOrEqual(chunk.count, 8)
+        }
     }
 }

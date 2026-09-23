@@ -18,6 +18,9 @@ final class ConversationController: ObservableObject {
     /// bounded so an extreme transcript cannot trigger unbounded agent work.
     static let chunker = TranscriptChunker(maximumCharacters: 18_000)
     static let maximumSummaryChunks = 12
+    /// Ceiling for the final combine turn, kept under the protocol's
+    /// `meeting-transcript` allowance.
+    static let combineCeiling = 90_000
 
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var recognizedText = ""
@@ -71,6 +74,7 @@ final class ConversationController: ObservableObject {
         // watch handover is never silently dropped; the retry control picks it
         // up once the current turn finishes.
         pendingVoiceNoteURL = url
+        summaryTruncated = false
         guard !isBusy else {
             phase = .failed("Busy")
             return
@@ -210,10 +214,18 @@ final class ConversationController: ObservableObject {
 
         try Task.checkCancellation()
         phase = .submitting
+        let notesText = notes.joined(separator: "\n\n")
+        if notesText.count > Self.combineCeiling {
+            // Notes are abnormally large. Present them directly rather than
+            // submitting a turn the Worker would reject, discarding the work.
+            replyText = notesText
+            phase = .idle
+            return
+        }
         let combine = """
             Combine these notes from one meeting into a single summary.
 
-            \(notes.joined(separator: "\n\n"))
+            \(notesText)
             """
         let submission = try await submissionWithRetry(
             text: combine,
@@ -253,6 +265,7 @@ final class ConversationController: ObservableObject {
     }
 
     private func startTurn(text: String, surface: TurnSurface) {
+        summaryTruncated = false
         runTask?.cancel()
         runTask = Task {
             guard let client = clientProvider?() else {

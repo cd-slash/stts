@@ -74,7 +74,7 @@ final class AppState: ObservableObject {
     /// Runs once at launch: clears audio left by a previous run and promotes a
     /// draft abandoned by a crash or termination into a saved transcript.
     func recoverAfterLaunch() async {
-        MeetingCoordinator.pruneOrphanedAudio()
+        MeetingCoordinator.pruneOrphanedAudio(protecting: watch.outstandingTransferPaths)
         await meetings.recoverUnfinishedMeetings()
         await library.refresh()
     }

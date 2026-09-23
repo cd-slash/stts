@@ -43,6 +43,10 @@ private struct TranscriptContent: View {
             .accessibilityLabel("Summarize meeting transcript")
 
             if summarizeRequested {
+                if conversation.summaryTruncated {
+                    Text("Truncated")
+                        .foregroundStyle(.orange)
+                }
                 switch conversation.phase {
                 case .submitting:
                     HStack {
