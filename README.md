@@ -33,6 +33,7 @@ CarPlay is a later native iOS client using the same BFF and application protocol
 
 ## Documentation
 
+- [Voice interface system](docs/design/README.md)
 - [Product requirements](docs/product-requirements.md)
 - [Architecture](docs/architecture.md)
 - [Apple clients](docs/apple-clients.md)
@@ -49,7 +50,7 @@ CarPlay is a later native iOS client using the same BFF and application protocol
 
 An owner-only preview is deployed at `https://stts.cdslash.com` behind Cloudflare Access. Live acceptance passes conversation creation, first and resumed Hermes turns, completed-response replay after handle rotation, Kokoro synthesis, and Qwen transcription through the Worker.
 
-The implementation contains a mobile PWA shell, Worker BFF, shared validated protocol, local mock adapters, Cloudflare Access JWT verification, production STT/TTS adapters, expiring response-audio tokens, and a Hermes adapter with opaque encrypted conversation state, durable resume, stale-event rejection, clarification responses, nonce-gated read-back approvals, and interruption. Native iOS and watchOS clients add wrist voice notes, meeting capture with segmented upload, on-device transcripts, and a bounded meeting-summary turn; see [Apple clients](docs/apple-clients.md). Resumable browser event streaming, transcript hydration, durable idempotency, subject rate limiting, and automatic new-turn redirection remain roadmap work.
+The implementation contains a mobile PWA shell, Worker BFF, shared validated protocol, local mock adapters, Cloudflare Access JWT verification, production STT/TTS adapters, expiring response-audio tokens, and a Hermes adapter with opaque encrypted conversation state, durable resume, stale-event rejection, clarification responses, nonce-gated read-back approvals, and interruption. All clients share one visual system — a black field that stays greyscale until the microphone is live ([design system](docs/design/README.md)). Native iOS and watchOS clients add wrist voice notes, meeting capture with segmented upload, on-device transcripts, and a bounded meeting-summary turn; see [Apple clients](docs/apple-clients.md). Resumable browser event streaming, transcript hydration, durable idempotency, subject rate limiting, and automatic new-turn redirection remain roadmap work.
 
 ## Development
 

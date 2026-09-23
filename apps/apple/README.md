@@ -22,6 +22,15 @@ apps/apple/
   STTSWatch/             watchOS app: voice notes, meeting control, reply playback
 ```
 
+## Design system
+
+Both SwiftUI targets follow the shared voice interface system in
+`docs/design/README.md`. Colour and type tokens live in exactly one file per
+target — `STTSiOS/Design/Palette.swift` and `STTSWatch/Design/Palette.swift` —
+and views reference the tokens by name. The interface is monochrome until
+something is recording (`live`) or has failed (`alert`). The apps render a
+single dark appearance; there is no light variant.
+
 ## Prerequisites
 
 - macOS with Xcode 16 or newer (Swift 6 toolchain).

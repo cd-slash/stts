@@ -81,7 +81,7 @@ summary:focus-visible {
 
 .topbar h1 {
   margin: 0;
-  font-size: 1.0625rem;
+  font-size: 1.25rem;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
@@ -90,7 +90,7 @@ summary:focus-visible {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   color: var(--ink-muted);
 }
 
@@ -133,7 +133,7 @@ summary:focus-visible {
   place-content: center;
   color: var(--ink);
   font-size: clamp(1.75rem, 7vw, 2.5rem);
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: -0.02em;
   text-align: center;
 }
@@ -296,9 +296,10 @@ summary:focus-visible {
   align-items: center;
   gap: 0.85rem;
   padding: 0.85rem 1rem;
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--outline);
   border-radius: 1.6rem;
   background: var(--surface-raised);
+  animation: swap-in 200ms ease-out;
 }
 
 .live-dot {
@@ -344,9 +345,19 @@ summary:focus-visible {
   align-items: end;
   gap: 0.5rem;
   padding: 0.4rem 0.4rem 0.4rem 1rem;
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--outline);
   border-radius: 1.6rem;
   background: var(--surface-raised);
+  animation: swap-in 200ms ease-out;
+}
+
+@keyframes swap-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .composer:focus-within {
@@ -366,7 +377,7 @@ summary:focus-visible {
 }
 
 .composer textarea::placeholder {
-  color: var(--ink-faint);
+  color: var(--ink-muted);
 }
 
 .composer textarea:disabled {
@@ -435,7 +446,7 @@ summary:focus-visible {
   }
 
   .send-button:hover:not(:disabled) {
-    background: #ffffff;
+    background: var(--ink);
   }
 }
 

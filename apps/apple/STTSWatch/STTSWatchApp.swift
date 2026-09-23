@@ -11,6 +11,7 @@ struct STTSWatchApp: App {
                 WatchVoiceNoteView()
                 WatchMeetingControlView()
             }
+            .background(Color.sttsVoid.ignoresSafeArea())
             .environmentObject(link)
             .environmentObject(recorder)
             .onAppear {

@@ -30,8 +30,10 @@ Everything below follows from that rule. Spend the boldness here and keep the re
 Rules:
 
 - Never use `live` or `alert` decoratively. If nothing is recording and nothing failed, the screen has no colour.
-- `hairline` is for grouping; anything a person must perceive as a boundary uses `outline`.
-- Text never sits on `surfaceRaised` below `inkMuted`.
+- `alert` also carries warnings that need attention — a truncated summary, an insecure server URL. Warnings are states, not failures, but they must not be silent.
+- `hairline` is for grouping; anything a person must perceive as a boundary uses `outline`. That includes the composer and the live bar, which are control edges and need non-text contrast.
+- Text never sits on `surfaceRaised` below `inkMuted`. Placeholder text is real text, not disabled text.
+- The app icon is the one deliberate exception to the `live` rule: an installed icon represents the act of listening, so it may carry the amber waveform.
 
 ## Type
 
@@ -148,3 +150,19 @@ Errors name what failed and what to do, in the interface's voice: `Transcription
 ## Applying this
 
 The tokens are normative. When a platform cannot express a token directly (watch materials, CarPlay templates), match the intent — contrast and hierarchy — rather than the literal value.
+
+Contrast was verified for the pairs that actually occur, not just against `void`:
+
+| Pair | Ratio |
+|---|---|
+| `ink` on `void` | 19.1 |
+| `ink` on `surfaceRaised` | 15.4 |
+| `live` on `void` | 10.5 |
+| `alert` on `void` | 7.5 |
+| `alert` on `surfaceRaised` | 6.1 |
+| `inkMuted` on `void` | 6.2 |
+| `inkMuted` on `surface` | 5.4 |
+| `inkMuted` on `surfaceRaised` | 5.0 |
+| `outline` on `void` | 3.3 |
+
+`inkFaint` sits at 2.5:1 on `surfaceRaised` and is for disabled text only.

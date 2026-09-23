@@ -7,118 +7,191 @@ struct MeetingView: View {
     var body: some View {
         MeetingContent(meetings: appState.meetings)
             .navigationTitle("Meeting")
+            .navigationBarTitleDisplayMode(.inline)
     }
 }
 
 private struct MeetingContent: View {
     @ObservedObject var meetings: MeetingCoordinator
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var markerLabel = ""
+    @State private var pulse = false
 
     var body: some View {
-        Form {
-            controlsSection
-            transcriptSection
-            if !meetings.markers.isEmpty {
-                markersSection
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            controlArea
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+            Rectangle()
+                .fill(Color.sttsHairline)
+                .frame(height: 1)
+            transcriptArea
         }
+        .background(Color.sttsVoid.ignoresSafeArea())
     }
 
-    @ViewBuilder private var controlsSection: some View {
-        Section {
+    // MARK: Controls
+
+    @ViewBuilder
+    private var controlArea: some View {
+        VStack(alignment: .leading, spacing: 16) {
             switch meetings.state {
             case .idle:
-                Button {
-                    meetings.start()
-                } label: {
-                    Label("Start recording", systemImage: "record.circle")
-                }
-                .accessibilityLabel("Start meeting recording")
+                primaryButton("Start recording", action: { meetings.start() })
+                    .accessibilityLabel("Start meeting recording")
             case .recording:
-                Text(STTSTimeFormat.clockString(ms: meetings.elapsedMs))
-                    .font(.system(.body, design: .monospaced))
-                    .accessibilityLabel("Meeting elapsed time")
-                Button("Pause") {
-                    meetings.pause()
-                }
-                .accessibilityLabel("Pause meeting recording")
-                HStack {
-                    TextField("Marker label", text: $markerLabel)
-                        .accessibilityLabel("Marker label")
-                    Button("Mark") {
-                        meetings.addMarker(label: markerLabel)
-                        markerLabel = ""
+                HStack(spacing: 12) {
+                    Circle()
+                        .fill(Color.sttsLive)
+                        .frame(width: 10, height: 10)
+                        .scaleEffect(pulse ? 1.4 : 1)
+                        .opacity(pulse ? 0.5 : 1)
+                        .animation(
+                            reduceMotion
+                                ? nil
+                                : Animation.easeInOut(duration: 0.9)
+                                    .repeatForever(autoreverses: true),
+                            value: pulse
+                        )
+                        .onAppear {
+                            guard !reduceMotion else { return }
+                            pulse = true
+                        }
+                        .accessibilityHidden(true)
+                    Text(STTSTimeFormat.clockString(ms: meetings.elapsedMs))
+                        .font(.sttsBodyTabular)
+                        .foregroundStyle(Color.sttsInk)
+                        .accessibilityLabel("Meeting elapsed time")
+                    Spacer(minLength: 8)
+                    Button("Pause") {
+                        meetings.pause()
                     }
-                    .accessibilityLabel("Add marker")
+                    .font(.sttsBody)
+                    .accessibilityLabel("Pause meeting recording")
                 }
+                markerComposer
                 Button("Stop", role: .destructive) {
                     meetings.stopAndSave()
                 }
+                .font(.sttsBody)
+                .foregroundStyle(Color.sttsAlert)
                 .accessibilityLabel("Stop and save meeting")
             case .paused:
                 Text("Paused")
-                Button("Resume") {
-                    meetings.resume()
+                    .font(.sttsBody)
+                    .foregroundStyle(Color.sttsInk)
+                HStack(spacing: 24) {
+                    Button("Resume") {
+                        meetings.resume()
+                    }
+                    .accessibilityLabel("Resume meeting recording")
+                    Button("Stop", role: .destructive) {
+                        meetings.stopAndSave()
+                    }
+                    .foregroundStyle(Color.sttsAlert)
+                    .accessibilityLabel("Stop and save meeting")
                 }
-                .accessibilityLabel("Resume meeting recording")
-                Button("Stop", role: .destructive) {
-                    meetings.stopAndSave()
-                }
-                .accessibilityLabel("Stop and save meeting")
+                .font(.sttsBody)
             case .processing:
-                HStack {
+                HStack(spacing: 8) {
                     ProgressView()
                     Text("Processing")
+                        .font(.sttsCaption)
+                        .foregroundStyle(Color.sttsInkMuted)
                 }
             case .saved:
-                Text("Saved")
-                Button("Done") {
-                    meetings.reset()
+                HStack {
+                    Text("Saved")
+                        .font(.sttsBody)
+                        .foregroundStyle(Color.sttsInk)
+                    Spacer(minLength: 8)
+                    Button("Done") {
+                        meetings.reset()
+                    }
+                    .accessibilityLabel("Close saved meeting")
                 }
-                .accessibilityLabel("Close saved meeting")
+                .font(.sttsBody)
             }
             if let message = meetings.statusMessage {
-                Text(message).foregroundStyle(.red)
+                Text(message)
+                    .font(.sttsCaption)
+                    .foregroundStyle(Color.sttsAlert)
             }
         }
     }
 
-    @ViewBuilder private var transcriptSection: some View {
-        Section("Transcript") {
-            if meetings.entries.isEmpty {
-                Text("No transcript").foregroundStyle(.secondary)
-            }
-            ForEach(meetings.entries, id: \.index) { entry in
-                HStack(alignment: .top) {
-                    Text(STTSTimeFormat.clockString(ms: entry.startedAtMs))
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                    switch entry.status {
-                    case .transcribed:
-                        Text(entry.text)
-                    case .pending:
-                        Text("Processing").foregroundStyle(.secondary)
-                    case .failed:
-                        Text("Segment failed").foregroundStyle(.red)
-                    }
-                }
-                .accessibilityElement(children: .combine)
-            }
+    private func primaryButton(
+        _ title: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.sttsBody)
+                .foregroundStyle(Color.sttsVoid)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color.sttsInk)
+                .clipShape(Capsule())
         }
     }
 
-    @ViewBuilder private var markersSection: some View {
-        Section("Markers") {
-            ForEach(meetings.markers) { marker in
-                HStack {
-                    Text(STTSTimeFormat.clockString(ms: marker.atOffsetMs))
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                    Text(marker.label)
+    private var markerComposer: some View {
+        HStack(spacing: 8) {
+            TextField("Marker label", text: $markerLabel)
+                .font(.sttsBody)
+                .foregroundStyle(Color.sttsInk)
+                .submitLabel(.done)
+                .onSubmit(addMarker)
+                .accessibilityLabel("Marker label")
+            Button("Mark", action: addMarker)
+                .accessibilityLabel("Add marker")
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, 12)
+        .padding(.vertical, 6)
+        .background(Color.sttsSurfaceRaised)
+        .clipShape(Capsule())
+        .overlay(Capsule().strokeBorder(Color.sttsOutline, lineWidth: 1))
+        .font(.sttsBody)
+    }
+
+    private func addMarker() {
+        meetings.addMarker(label: markerLabel)
+        markerLabel = ""
+    }
+
+    // MARK: Transcript
+
+    private var transcriptArea: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 16) {
+                if meetings.entries.isEmpty {
+                    Text("No transcript")
+                        .font(.sttsCaption)
+                        .foregroundStyle(Color.sttsInkMuted)
                 }
-                .accessibilityElement(children: .combine)
+                ForEach(meetings.entries, id: \.index) { entry in
+                    TranscriptRow(
+                        startedAtMs: entry.startedAtMs,
+                        content: content(of: entry)
+                    )
+                }
+                ForEach(meetings.markers) { marker in
+                    MarkerRow(atOffsetMs: marker.atOffsetMs, label: marker.label)
+                }
             }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func content(of entry: TranscriptEntry) -> TranscriptRow.Content {
+        switch entry.status {
+        case .transcribed: .text(entry.text)
+        case .pending: .processing
+        case .failed: .failedSegment
         }
     }
 }

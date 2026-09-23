@@ -18,6 +18,10 @@ struct RootView: View {
             }
             .tabItem { Label("Settings", systemImage: "gearshape") }
         }
+        .tint(Color.sttsInk)
+        .preferredColorScheme(.dark)
+        .toolbarBackground(Color.sttsVoid, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
         .task {
             await appState.recoverAfterLaunch()
         }
