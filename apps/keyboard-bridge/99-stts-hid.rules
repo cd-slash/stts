@@ -1,0 +1,1 @@
+KERNEL=="hidg0", GROUP="stts-keyboard", MODE="0660"

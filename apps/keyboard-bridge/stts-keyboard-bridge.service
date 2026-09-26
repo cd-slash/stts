@@ -1,0 +1,24 @@
+[Unit]
+Description=STTS keyboard bridge
+Requires=stts-keyboard-gadget.service
+After=stts-keyboard-gadget.service network-online.target
+
+[Service]
+Type=simple
+User=stts-keyboard
+Group=stts-keyboard
+EnvironmentFile=/etc/stts-keyboard/bridge.env
+ExecStartPre=/usr/bin/test -w /dev/hidg0
+ExecStart=/usr/bin/python3 /opt/stts-keyboard/bridge.py
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+DevicePolicy=closed
+DeviceAllow=/dev/hidg0 rw
+RestrictAddressFamilies=AF_INET AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

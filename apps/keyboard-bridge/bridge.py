@@ -1,4 +1,4 @@
-"""Loopback-only bridge for a Linux USB gadget or serial-controlled keyboard.
+"""Authenticated bridge for a Linux USB gadget or serial-controlled keyboard.
 
 Serial protocol: PING\n -> PONG\n; TYPE <byte-count>\n<ASCII bytes> -> OK\n.
 The device acknowledges only after sending all HID key reports.
@@ -44,11 +44,26 @@ def report(character: str) -> bytes:
 
 def type_gadget(text: str):
     with open(HIDG, "wb", buffering=0) as device:
-        for character in text:
-            if device.write(report(character)) != 8 or device.write(bytes(8)) != 8:
-                raise OSError("Short HID report")
-            # Allow the host's keyboard polling interval to observe both reports.
-            time.sleep(0.002)
+        try:
+            for character in text:
+                if device.write(report(character)) != 8 or device.write(bytes(8)) != 8:
+                    raise OSError("Short HID report")
+                # Allow the host's keyboard polling interval to observe both reports.
+                time.sleep(0.002)
+        finally:
+            # Best effort: never intentionally leave a modifier held after failure.
+            try:
+                device.write(bytes(8))
+            except OSError:
+                pass
+
+
+def gadget_ready() -> bool:
+    try:
+        with open("/sys/kernel/config/usb_gadget/stts_keyboard/UDC", encoding="ascii") as bound:
+            return bool(bound.read().strip()) and os.access(HIDG, os.W_OK)
+    except OSError:
+        return False
 
 
 def exchange(command: bytes, payload: bytes = b"", timeout: float = 30) -> bytes:
@@ -86,7 +101,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if HIDG:
                 if command == b"PING\n":
-                    response = b"PONG" if os.path.exists(HIDG) else b"ERR"
+                    response = b"PONG" if gadget_ready() else b"ERR"
                 else:
                     type_gadget(payload.decode("ascii"))
                     response = b"OK"
@@ -132,5 +147,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    # Tunnel ingress points at this loopback listener, never a public bind.
-    ThreadingHTTPServer(("127.0.0.1", int(os.environ.get("STTS_KEYBOARD_LISTEN_PORT", "8778"))), Handler).serve_forever()
+    # Default loopback; a USB-gadget installation binds only to its private USB IP.
+    ThreadingHTTPServer((os.environ.get("STTS_KEYBOARD_LISTEN_HOST", "127.0.0.1"),
+                         int(os.environ.get("STTS_KEYBOARD_LISTEN_PORT", "8778"))), Handler).serve_forever()

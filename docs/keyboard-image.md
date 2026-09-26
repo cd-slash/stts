@@ -1,0 +1,50 @@
+# Keyboard gadget: clean-image design
+
+## What the USB evidence establishes
+
+`ubuntu-1` enumerates `STTKBD01` as a **high-speed Linux USB HID gadget** (`1d6b:0102`, `bcdDevice 6.12`, one boot-keyboard HID interface, 8-byte interrupt endpoints). It does not enumerate a USB-serial ESP-32, a USB network interface, or a storage interface for this device. A plain ESP32 or ESP32-S3 image would not reproduce this device. After the 32 GB SD card was removed and inserted into a USB reader, the gadget re-enumerated as Broadcom `BCM2710 Boot` (`0a5c:2764`), strong evidence for a **Raspberry Pi Zero 2 W**. The card appears at `/dev/sdl` on `ubuntu-1` with a 512 MB FAT `bootfs` and 28.5 GB ext4 `rootfs`. Verify the exact board and existing OS from the card/board before selecting a new image; `/dev/sdl` is an ephemeral device name, so always re-identify the card before any write.
+
+## Preferred single-device stack
+
+The `BCM2710 Boot` identity strongly supports a Pi Zero 2 W. If confirmed, reuse it and image the correct Raspberry Pi OS Lite 64-bit release. If the card indicates another Pi variant, use its supported Lite image and check whether Cloudflare's connector builds for its CPU; otherwise move the tunnel connector to `ubuntu-1`. An actual ESP-32 would require a different firmware/control-link plan, but is inconsistent with the USB evidence.
+
+Read-only inspection of the card confirmed a 64-bit Debian 13 (Trixie) image named `stt-kbd-pi`. It contained a boot-keyboard configfs script with the exact standard 8-byte report descriptor expected by the new bridge, a Wi-Fi profile, SSH keys, and the old speech-to-keyboard app. No installed Tailscale binary/state was found. A verified full-card backup is stored on `ubuntu-1` at `/root/stts-keyboard-backups/sttkbd01-original-2026-09-26.img.zst` (root-only directory; includes old device credentials). The clean-image base is the official Raspberry Pi OS Lite arm64 image dated **2026-09-15** (`2026-09-15-raspios-trixie-arm64-lite.img.xz`, SHA-256 `cdf4f3bfac35ae947b46e4e767f935453810549779ac3290e05a6754aee627e5`). Its download was verified against the publisher's checksum. The prepared image contains an owner-controlled SSH public key, USB-network bootstrap, disabled HID services, and a restrictive sshd drop-in. Its staged SHA-256 is `f36d9593521c6f109a2e2799eb7d97f3e8c1750885fe423d0751a58607c876f5`. The 32 GB SD card was flashed, compared byte-for-byte against this image, and flushed on `ubuntu-1`. Its initial boot has not yet been tested on the board.
+
+```text
+STTS browser (owner Access session)
+  → STTS Worker (validates text; one configured device)
+  → dedicated Access-protected keyboard hostname (service token)
+  → cloudflared on ubuntu-1 → private USB network 172.31.239.2:8778
+  → bridge on Pi (separate bearer key) → /dev/hidg0
+  → same USB cable → ubuntu-1 as a keyboard
+
+Management: Tailscale SSH to ubuntu-1 → SSH over the private USB network to Pi
+```
+
+Use one USB data cable from the Pi's **OTG/device** port to `ubuntu-1` and present a *composite* HID keyboard + CDC ECM USB Ethernet gadget. Provide stable power through the Pi's separate power input or USB if supported. Give the host USB interface `172.31.239.1/30` and the Pi USB interface `172.31.239.2/30`; no gateway or DNS is needed on the Pi for keyboard operation. Bind the bridge only to `172.31.239.2:8778`. `ubuntu-1` already runs cloudflared and Tailscale, so it can host the connector and be the sole management jump host. This eliminates Wi-Fi, a tailnet enrollment, and a tunnel process on the memory-limited Pi. Add an optional Wi-Fi path only if standalone placement is later required. Reserve the chosen /30 from Docker/LAN routing and firewall the host-side USB link; the bridge still requires a separate bearer token.
+
+**Recovery-first boot:** `apps/keyboard-bridge/prepare-image.sh` stages the clean image to start as a *USB Ethernet-only* gadget (`g_ether`) with a private static address and a provisioned SSH key. This gives a wired administrative path without relying on Wi-Fi or a password-protected serial console. Once SSH over USB succeeds, replace `g_ether` with the composite HID+ECM service and verify SSH still works. Keep the verified backup image to restore the card if the composite fails; never switch to HID-only without an administrative interface. Adding ACM serial to the composite is a later recovery improvement if the Pi's USB controller has sufficient endpoints.
+
+### OS and services
+
+- Minimal headless OS, Python 3, `systemd`, kernel USB gadget/configfs support. No desktop, browser, or agent runtime on the gadget. Use a maintained image for the *actual* board/CPU and enable SSH via a provisioned public key.
+- Use a unique hostname such as `stts-keyboard-1` and a provisioned SSH key. Configure the private USB network statically with no default route; use Wi-Fi for initial package installation or route package downloads through `ubuntu-1` if necessary. Tailscale runs on `ubuntu-1`, not on the Pi.
+- A `systemd` oneshot unit sets up `libcomposite`/`configfs`: one HID function, subclass 1 (boot), protocol 1 (keyboard), 8-byte reports and a **standard US boot-keyboard report descriptor** matching the bridge's reports, plus one CDC ECM function with a stable private MAC pair. The clean image uses serial `STTSKBD01` instead of the former `STTKBD01`; update any host rules keyed to the old serial. Do not bind the UDC while another gadget module (`g_ether`) owns it.
+- A second `systemd` service starts `apps/keyboard-bridge/bridge.py` only after the HID node and USB network are configured, with `STTS_KEYBOARD_HIDG=/dev/hidg0`, `STTS_KEYBOARD_LISTEN_HOST=172.31.239.2`, and `STTS_KEYBOARD_TOKEN` from a root-owned environment file. Give its non-root user write access to **only** `/dev/hidg0` using a udev rule/group. Disable the old keyboard writer before the new one starts.
+- A tunnel connector on `ubuntu-1` targets `http://172.31.239.2:8778`. A dedicated Cloudflare Access application/service token on the keyboard hostname is separate from the STTS application and from the bridge bearer key. The Worker keeps both secrets; the browser holds neither. Tailscale SSH to `ubuntu-1`, then SSH over USB to the Pi, for updates and diagnostics.
+
+For the current PWA path, accept printable US ASCII, tab and enter only. Release every key (including modifiers) after each character, serialize jobs, and send a final all-keys-up report on completion and error. Start with ~2 ms between reports and tune against real typing into a disposable target field. A 500-character acceptance sample should finish in a few seconds; record actual elapsed time, accuracy and failures rather than assuming maximum USB polling throughput. HID completion only means reports were written, not that the target application kept focus or accepted every character. Do not silently retry a timed-out typing job: partial output may already exist.
+
+## Card-removal and bring-up sequence
+
+1. Power the gadget down; photograph board markings, port labels and both sides of the card. Determine whether it is microSD/SD/CompactFlash and the board's CPU/RAM, power and OTG ports. Keep the old card untouched if possible; otherwise capture a full block image before writing (`dd`/imaging utility) to preserve its gadget configuration and provide rollback. Do not write to the card while mounted.
+2. Stage the downloaded image with `apps/keyboard-bridge/prepare-image.sh` and a dedicated SSH public key. Flash a **spare compatible card**, or overwrite the original only after the full backup is verified. Boot as USB Ethernet (`g_ether`). Install `apps/keyboard-bridge/05-stts-keyboard-usb.network` under `/etc/systemd/network/` on `ubuntu-1` to assign its USB link `172.31.239.1/30`; the prepared image assigns `172.31.239.2/30` to the Pi. Check `networkctl status` to verify this rule was selected. SSH to `stts@172.31.239.2` with the dedicated key. Confirm access before replacing `g_ether` with the composite gadget.
+3. After wired SSH works, create the `stts-keyboard` system user/group on the Pi and a root-owned `/etc/stts-keyboard/bridge.env` containing a fresh random `STTS_KEYBOARD_TOKEN`, `STTS_KEYBOARD_HIDG=/dev/hidg0` and `STTS_KEYBOARD_LISTEN_HOST=172.31.239.2`. Enable the staged gadget and bridge systemd units, disable `g_ether` in the boot modules list, and reboot into HID+ECM. On `ubuntu-1`, verify both the keyboard in `/dev/input/by-id` and the USB network interface; SSH again to `172.31.239.2`. Check bridge `/health` and type short printable text into a deliberately focused test field. The staged udev rule gives only the bridge group access to `/dev/hidg0`.
+4. Set up the dedicated tunnel and Access application on `ubuntu-1`; provision separate Worker secrets; test the authenticated `GET /api/keyboard` route and a short typed phrase from the PWA. Test unplug/replug, reboots, incorrect keyboard focus, repeated punctuation/shift, and disconnection mid-message. Verify that a duplicate send is never automatic.
+5. Record device model, card image/version, USB MACs and subnet, HID report descriptor, service units, tunnel hostname, accepted layout, and observed throughput in this document. Keep a copy of the known-good original image for recovery.
+
+**Until step 1 identifies the board and provides a network/console path, the draft PR is a tested software design, not a deployed keyboard.** The existing HID-only USB link does not support remote reimaging from `ubuntu-1`.
+
+## Future pairing
+
+The first release uses one configured endpoint. Later, give each gadget an opaque device ID and its own revocable credential/queue. An owner initiates pairing in STTS, presses a physical button on the gadget (or supplies a one-time code printed on its local console), and confirms the displayed device identity. The Worker records owner-to-device binding and short-lived pairing state; no permanent device secrets go to the browser. Reimaging generates new device credentials and revokes the old ones. Device selection can then be added without changing the initial typing protocol.

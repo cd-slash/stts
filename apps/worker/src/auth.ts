@@ -21,6 +21,7 @@ export interface Bindings {
   KEYBOARD_ACCESS_CLIENT_ID?: string;
   KEYBOARD_ACCESS_CLIENT_SECRET?: string;
   KEYBOARD_BRIDGE_TOKEN?: string;
+  KEYBOARD_OWNER_SUBJECT?: string;
 }
 
 export interface Variables {

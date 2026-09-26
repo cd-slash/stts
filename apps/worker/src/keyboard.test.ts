@@ -9,7 +9,8 @@ const env: Bindings = {
   KEYBOARD_BASE_URL: "https://keyboard.cdslash.com",
   KEYBOARD_ACCESS_CLIENT_ID: "device-id",
   KEYBOARD_ACCESS_CLIENT_SECRET: "access-secret",
-  KEYBOARD_BRIDGE_TOKEN: "bridge-secret"
+  KEYBOARD_BRIDGE_TOKEN: "bridge-secret",
+  KEYBOARD_OWNER_SUBJECT: "local-owner"
 };
 
 const request = (text: unknown, configuration = env) => app.request(
@@ -25,6 +26,15 @@ describe("keyboard route", () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
     expect((await request("hello", { ...env, AUTH_MODE: "access" })).status).toBe(401);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("restricts typing to the configured owner", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const response = await request("hello", { ...env, KEYBOARD_OWNER_SUBJECT: "someone-else" });
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ retryable: false });
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -53,7 +63,9 @@ describe("keyboard route", () => {
     expect((await request("Hello", { ...env, KEYBOARD_BASE_URL: undefined })).status).toBe(503);
     const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 302 }));
     vi.stubGlobal("fetch", fetch);
-    expect((await request("Hello")).status).toBe(503);
+    const redirected = await request("Hello");
+    expect(redirected.status).toBe(503);
+    await expect(redirected.json()).resolves.toMatchObject({ retryable: false });
     fetch.mockRejectedValueOnce(new Error("network"));
     expect((await request("Hello")).status).toBe(503);
   });

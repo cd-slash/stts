@@ -20,11 +20,17 @@ app.use("/api/*", requireIdentity);
 app.get("/api/health", (context) => context.json({ status: "ok" }));
 
 app.get("/api/keyboard", async (context) => {
+  if (!context.env.KEYBOARD_OWNER_SUBJECT || context.get("subject") !== context.env.KEYBOARD_OWNER_SUBJECT) {
+    return context.json({ available: false });
+  }
   const result = await keyboardRequest(context.env, "GET");
   return context.json({ available: result.status === 200 });
 });
 
 app.post("/api/keyboard/type", async (context) => {
+  if (!context.env.KEYBOARD_OWNER_SUBJECT || context.get("subject") !== context.env.KEYBOARD_OWNER_SUBJECT) {
+    return context.json({ code: "FORBIDDEN", message: "Keyboard unavailable", retryable: false }, 403);
+  }
   const raw = await context.req.text();
   if (raw.length > 6 * 1024) {
     return context.json({ code: "PAYLOAD_TOO_LARGE", message: "Text too long", retryable: false }, 413);
@@ -38,7 +44,7 @@ app.post("/api/keyboard/type", async (context) => {
   const result = await keyboardRequest(context.env, "POST", text);
   if (result.status !== 200) {
     return context.json(
-      { code: result.code, message: result.status === 409 ? "Keyboard busy" : "Keyboard unavailable", retryable: result.status !== 400 },
+      { code: result.code, message: result.status === 409 ? "Keyboard busy" : "Keyboard unavailable", retryable: result.status === 409 },
       result.status as 400 | 409 | 503
     );
   }

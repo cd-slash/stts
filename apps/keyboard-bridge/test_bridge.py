@@ -67,7 +67,7 @@ class BridgeTests(unittest.TestCase):
              patch.object(bridge.time, "sleep"):
             device.return_value.__enter__.return_value.write.return_value = 8
             bridge.type_gadget("A!")
-            self.assertEqual(device.return_value.__enter__.return_value.write.call_count, 4)
+            self.assertEqual(device.return_value.__enter__.return_value.write.call_count, 5)
 
 
 if __name__ == "__main__":
