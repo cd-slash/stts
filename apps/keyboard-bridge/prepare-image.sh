@@ -54,24 +54,9 @@ EOF
 cat > "$root/etc/modprobe.d/stts-usb-network.conf" <<'EOF'
 options g_ether host_addr=02:4b:42:44:00:01 dev_addr=02:4b:42:44:00:02
 EOF
-cat > "$root/etc/NetworkManager/system-connections/stts-usb.nmconnection" <<'EOF'
-[connection]
-id=STTS USB
-type=ethernet
-interface-name=usb0
-autoconnect=true
-
-[ethernet]
-mac-address=02:4b:42:44:00:02
-
-[ipv4]
-address1=172.31.239.2/30
-method=manual
-
-[ipv6]
-method=disabled
-EOF
-chmod 600 "$root/etc/NetworkManager/system-connections/stts-usb.nmconnection"
+rm -f "$root/etc/NetworkManager/system-connections/stts-usb.nmconnection"
+install -d "$root/etc/NetworkManager/conf.d"
+install -m 0644 "$dir/stts-usb-unmanaged.conf" "$root/etc/NetworkManager/conf.d/stts-usb-unmanaged.conf"
 # Do not let cloud-init generate an overlapping DHCP connection for usb0.
 cat > "$root/etc/cloud/cloud.cfg.d/99-stts-network.cfg" <<'EOF'
 network: {config: disabled}
@@ -106,7 +91,9 @@ EOF
 install -d -m 0755 "$root/opt/stts-keyboard" "$root/usr/local/sbin"
 install -m 0644 "$dir/bridge.py" "$root/opt/stts-keyboard/bridge.py"
 install -m 0755 "$dir/gadget.sh" "$root/usr/local/sbin/stts-keyboard-gadget"
-install -m 0644 "$dir/stts-keyboard-gadget.service" "$dir/stts-keyboard-bridge.service" "$root/etc/systemd/system/"
+install -m 0644 "$dir/stts-keyboard-gadget.service" "$dir/stts-keyboard-bridge.service" "$dir/stts-keyboard-usb-fallback.service" "$root/etc/systemd/system/"
+install -m 0644 "$dir/stts-keyboard-usb.service" "$root/etc/systemd/system/"
 install -m 0644 "$dir/99-stts-hid.rules" "$root/etc/udev/rules.d/"
+ln -sfn /etc/systemd/system/stts-keyboard-usb.service "$root/etc/systemd/system/multi-user.target.wants/stts-keyboard-usb.service"
 sync
 echo "Staged USB-network bootstrap and disabled HID services in $image"

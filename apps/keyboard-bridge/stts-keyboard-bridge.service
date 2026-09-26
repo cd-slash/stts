@@ -1,7 +1,7 @@
 [Unit]
 Description=STTS keyboard bridge
-Requires=stts-keyboard-gadget.service
-After=stts-keyboard-gadget.service network-online.target
+Requires=stts-keyboard-gadget.service stts-keyboard-usb.service
+After=stts-keyboard-gadget.service stts-keyboard-usb.service
 
 [Service]
 Type=simple

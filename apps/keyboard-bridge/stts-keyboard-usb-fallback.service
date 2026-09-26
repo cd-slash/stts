@@ -1,0 +1,6 @@
+[Unit]
+Description=Restore USB network if keyboard gadget setup fails
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/modprobe g_ether
