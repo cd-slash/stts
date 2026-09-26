@@ -26,6 +26,23 @@ const wait = (milliseconds: number) =>
 
 const usesWorker = import.meta.env.VITE_BACKEND === "worker";
 export const backendLabel = usesWorker ? "Worker" : "Mock";
+
+export async function keyboardAvailable(): Promise<boolean> {
+  if (!usesWorker) return false;
+  const response = await fetch("/api/keyboard", { credentials: "same-origin" });
+  if (!response.ok) return false;
+  const body: unknown = await response.json();
+  return !!body && typeof body === "object" && "available" in body && body.available === true;
+}
+
+export async function typeOnKeyboard(text: string): Promise<void> {
+  await fetch("/api/keyboard/type", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text })
+  }).then(parseJson);
+}
 const conversationStorageKey = "stts.conversation.v1";
 
 class ApiError extends Error {

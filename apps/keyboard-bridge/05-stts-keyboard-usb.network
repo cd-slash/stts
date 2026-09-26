@@ -1,0 +1,13 @@
+[Match]
+MACAddress=02:4b:42:44:00:01
+
+[Link]
+RequiredForOnline=no
+
+[Network]
+Address=172.31.239.1/30
+DHCP=no
+ConfigureWithoutCarrier=yes
+LinkLocalAddressing=no
+IPv6AcceptRA=no
+IPForward=no

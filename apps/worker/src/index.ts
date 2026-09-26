@@ -12,11 +12,44 @@ import { requireIdentity, type Bindings, type Variables } from "./auth";
 import { ConversationStateCodec } from "./conversation-state";
 import { ResponseStateCodec } from "./response-state";
 import { createSpeechAdapter, SpeechAdapterError } from "./speech";
+import { keyboardRequest, keyboardText } from "./keyboard";
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 app.use("/api/*", requireIdentity);
 app.get("/api/health", (context) => context.json({ status: "ok" }));
+
+app.get("/api/keyboard", async (context) => {
+  if (!context.env.KEYBOARD_OWNER_SUBJECT || context.get("subject") !== context.env.KEYBOARD_OWNER_SUBJECT) {
+    return context.json({ available: false });
+  }
+  const result = await keyboardRequest(context.env, "GET");
+  return context.json({ available: result.status === 200 });
+});
+
+app.post("/api/keyboard/type", async (context) => {
+  if (!context.env.KEYBOARD_OWNER_SUBJECT || context.get("subject") !== context.env.KEYBOARD_OWNER_SUBJECT) {
+    return context.json({ code: "FORBIDDEN", message: "Keyboard unavailable", retryable: false }, 403);
+  }
+  const raw = await context.req.text();
+  if (raw.length > 6 * 1024) {
+    return context.json({ code: "PAYLOAD_TOO_LARGE", message: "Text too long", retryable: false }, 413);
+  }
+  let body: unknown;
+  try { body = JSON.parse(raw); } catch { body = null; }
+  const text = keyboardText(body && typeof body === "object" && "text" in body ? body.text : null);
+  if (!text) {
+    return context.json({ code: "INVALID_REQUEST", message: "Invalid keyboard text", retryable: false }, 400);
+  }
+  const result = await keyboardRequest(context.env, "POST", text);
+  if (result.status !== 200) {
+    return context.json(
+      { code: result.code, message: result.status === 409 ? "Keyboard busy" : "Keyboard unavailable", retryable: result.status === 409 },
+      result.status as 400 | 409 | 503
+    );
+  }
+  return context.json({ status: "typed" });
+});
 
 const segmentFieldNames = [
   "recordingId",

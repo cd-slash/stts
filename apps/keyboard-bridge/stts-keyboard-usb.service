@@ -1,0 +1,15 @@
+[Unit]
+Description=STTS private USB network
+After=systemd-modules-load.service stts-keyboard-gadget.service
+Before=stts-keyboard-bridge.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/ip address replace 172.31.239.2/30 dev usb0
+ExecStart=/usr/bin/ip link set dev usb0 up
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

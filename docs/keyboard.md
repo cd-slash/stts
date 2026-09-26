@@ -1,0 +1,23 @@
+# USB keyboard gadget (single-device preview)
+
+The PWA has a separate `Keyboard` text field and can also type a coordinator reply. The browser sends text through the authenticated STTS Worker, which calls a private-network bridge through a dedicated Cloudflare Tunnel hostname. A dedicated Cloudflare Access service token protects that hostname; the bridge also checks a separate bearer secret. The bridge supports either a Linux HID gadget's `/dev/hidg0` or a length-prefixed serial link to a keyboard controller. No device secrets reach the browser.
+
+## Hardware and firmware checkpoint
+
+**Live findings (2026-09-26):** `tailscale ssh root@ubuntu-1` works; plain `ssh` is denied by tailnet policy. The original device was USB HID keyboard `Generic USB Keyboard`, serial `STTKBD01`, `1d6b:0102`, high-speed 480 Mbps, Linux gadget version 6.12. Its USB boot mode identified the board as Broadcom `BCM2710 Boot` (consistent with a Raspberry Pi Zero 2 W). Its previous card held a 64-bit Debian 13 keyboard installation and Wi-Fi profile. It is **not an ESP32-S3 USB gadget**. A clean Raspberry Pi OS Lite card now boots as composite HID keyboard plus USB Ethernet; `ubuntu-1` reaches `stts@172.31.239.2` over the single USB cable. The keyboard and bridge services survive reboot. A physical HID event capture verified `stts 123!` from the bridge while grabbing the input device so no desktop app received it. The dedicated `keyboard-origin.cdslash.com` tunnel and Access service-token policy are active; the bridge independently requires its bearer token. The Worker deployed on 2026-09-26 with the owner's Access user ID and private credentials. Avoid writing to `/dev/hidg0` alongside the bridge.
+
+The bridge supports US-layout printable ASCII, tab and return. Other layouts and Unicode need explicit mapping before being enabled. A successful response means HID writes completed (or serial firmware acknowledged), not that a foreground application received every character.
+
+## Provisioning and recovery
+
+1. The Pi is `stts-keyboard-1`; `ubuntu-1` holds the private SSH key at `/root/stts-keyboard-backups/stts-keyboard-ssh`. On the Pi, `stts-keyboard-gadget.service` creates HID+ECM, `stts-keyboard-usb.service` assigns `172.31.239.2/30`, and `stts-keyboard-bridge.service` listens on `172.31.239.2:8778`. Its bearer token is root-readable in `/etc/stts-keyboard/bridge.env`. The dedicated `stts-keyboard-cloudflared` container on `ubuntu-1` connects `keyboard-origin.cdslash.com` to that address; its tunnel token is stored under `/root/stts-keyboard-secrets/`.
+2. The Cloudflare Access app for the origin admits only the dedicated `stts-keyboard-worker` service token. Worker secrets are `KEYBOARD_BASE_URL`, `KEYBOARD_ACCESS_CLIENT_ID`, `KEYBOARD_ACCESS_CLIENT_SECRET`, `KEYBOARD_BRIDGE_TOKEN`, and `KEYBOARD_OWNER_SUBJECT`; do not put their values in the repo or client env vars. The bridge bearer token matches `STTS_KEYBOARD_TOKEN`. Credential setup files are outside the repo under `/home/coder/.config/stts-keyboard/` (mode 0600).
+3. From the intended owner's authenticated session, verify `GET /api/keyboard` reports connected. With the receiving machine focused on a disposable text field, type a short non-sensitive phrase and verify timing and exact output; test disconnection and reconnect. The UI disables typing while disconnected. In HID-gadget mode `Connected` means the bridge can see `/dev/hidg0`, not that the target has focus.
+
+This first version has one configured endpoint; no pairing UI or device IDs are exposed yet. For multi-device support, add an owner-bound device registry with opaque device IDs and per-device keys, a short-lived physical-confirmation pairing flow, revocation, and a per-device queue. Keep device discovery and tunnel credentials on the Worker side.
+
+## Protocol
+
+ASCII bytes only, at most 4096 characters per request. The Worker normalizes CRLF/CR to LF. In HID-gadget mode the bridge writes 8-byte boot-keyboard press and release reports to `/dev/hidg0`; health checks only verify that the node exists, not that the receiving desktop is focused. In serial mode, `PING\n` returns `PONG\n`; `TYPE <count>\n<exactly count bytes>` returns `OK\n` after transmission or `ERR\n` on failure. Commands are serialized at the bridge; an in-flight request returns HTTP 409 to another caller. A timeout can leave delivery ambiguous: do **not** blindly retry a failed typing request; some characters may already have been sent. The bridge never accepts arbitrary keycodes, shortcuts, shell commands or arbitrary device selection.
+
+The proposed clean-image architecture and card-removal procedure are in [Keyboard image design](keyboard-image.md).

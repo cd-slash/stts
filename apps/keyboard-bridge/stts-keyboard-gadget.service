@@ -1,0 +1,13 @@
+[Unit]
+Description=STTS keyboard and USB network gadget
+After=systemd-modules-load.service sys-kernel-config.mount
+Before=network-pre.target
+OnFailure=stts-keyboard-usb-fallback.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/stts-keyboard-gadget
+
+[Install]
+WantedBy=multi-user.target

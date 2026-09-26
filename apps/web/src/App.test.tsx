@@ -11,7 +11,9 @@ vi.mock("./api-client", () => ({
   interruptActiveTurn: vi.fn(),
   playResponse: vi.fn(),
   speakLocal: vi.fn(),
-  stopAudio: vi.fn()
+  stopAudio: vi.fn(),
+  keyboardAvailable: vi.fn().mockResolvedValue(false),
+  typeOnKeyboard: vi.fn()
 }));
 
 Object.defineProperty(window, "speechSynthesis", {
@@ -20,7 +22,10 @@ Object.defineProperty(window, "speechSynthesis", {
 });
 
 describe("App", () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(api.keyboardAvailable).mockResolvedValue(false);
+  });
   afterEach(cleanup);
 
   it("presents voice-first controls and a text fallback", () => {
@@ -80,5 +85,17 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     fireEvent.click(await screen.findByRole("button", { name: "Stop work" }));
     await waitFor(() => expect(api.interruptActiveTurn).toHaveBeenCalledOnce());
+  });
+
+  it("types a draft through the ESP-32 when connected", async () => {
+    vi.mocked(api.keyboardAvailable).mockResolvedValue(true);
+    vi.mocked(api.typeOnKeyboard).mockResolvedValue();
+    render(<App />);
+    await screen.findByText("Connected");
+    const field = screen.getByRole("textbox", { name: "Keyboard" });
+    fireEvent.change(field, { target: { value: "Hello, world!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Type on keyboard" }));
+    await waitFor(() => expect(api.typeOnKeyboard).toHaveBeenCalledWith("Hello, world!"));
+    expect(await screen.findByText("Typed")).toBeInTheDocument();
   });
 });

@@ -17,6 +17,11 @@ export interface Bindings {
   SPEECH_BASE_URL?: string;
   SPEECH_API_KEY?: string;
   SPEECH_TIMEOUT_MS?: string;
+  KEYBOARD_BASE_URL?: string;
+  KEYBOARD_ACCESS_CLIENT_ID?: string;
+  KEYBOARD_ACCESS_CLIENT_SECRET?: string;
+  KEYBOARD_BRIDGE_TOKEN?: string;
+  KEYBOARD_OWNER_SUBJECT?: string;
 }
 
 export interface Variables {
