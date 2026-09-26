@@ -3,10 +3,12 @@ import {
   answerInput,
   backendLabel,
   interruptActiveTurn,
+  keyboardAvailable,
   playResponse,
   speakLocal,
   stopAudio,
   submitTurn,
+  typeOnKeyboard,
   transcribeVoiceNote,
   type AgentResult,
   type PendingInput
@@ -40,6 +42,10 @@ function phaseLabel(phase: Phase) {
   return labels[phase];
 }
 
+function canType(text: string) {
+  return text.length > 0 && text.length <= 4096 && /^[\x20-\x7e\t\r\n]+$/.test(text);
+}
+
 export function App() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [seconds, setSeconds] = useState(0);
@@ -49,6 +55,10 @@ export function App() {
   const [pendingInput, setPendingInput] = useState<PendingInput | null>(null);
   const [approvalArmed, setApprovalArmed] = useState(false);
   const [canInterrupt, setCanInterrupt] = useState(false);
+  const [keyboardText, setKeyboardText] = useState("");
+  const [keyboardReady, setKeyboardReady] = useState(false);
+  const [keyboardSending, setKeyboardSending] = useState(false);
+  const [keyboardStatus, setKeyboardStatus] = useState("");
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -83,6 +93,39 @@ export function App() {
     if (pendingInput?.kind === "approval") inputActionRef.current?.focus();
     if (pendingInput?.kind === "clarification") textEntryRef.current?.focus();
   }, [pendingInput]);
+
+  useEffect(() => {
+    let active = true;
+    void keyboardAvailable().then((available) => {
+      if (active) setKeyboardReady(available);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  async function refreshKeyboard() {
+    try {
+      const available = await keyboardAvailable();
+      setKeyboardReady(available);
+      setKeyboardStatus(available ? "Connected" : "Keyboard unavailable");
+    } catch {
+      setKeyboardReady(false);
+      setKeyboardStatus("Keyboard unavailable");
+    }
+  }
+
+  async function sendKeyboard(text: string) {
+    setKeyboardSending(true);
+    setKeyboardStatus("Typing");
+    try {
+      await typeOnKeyboard(text);
+      setKeyboardStatus("Typed");
+    } catch {
+      setKeyboardStatus("Keyboard unavailable");
+      setKeyboardReady(false);
+    } finally {
+      setKeyboardSending(false);
+    }
+  }
 
   function applyAgentResult(result: AgentResult) {
     if (result.kind === "interrupted") {
@@ -206,14 +249,17 @@ export function App() {
             <article className={`message message--${message.role}`} key={message.id}>
               <p className="message-text">{message.text}</p>
               {message.role === "coordinator" && (
-                <button
-                  type="button"
-                  className="replay"
-                  onClick={() => void playResponse(message.text, message.responseId).catch(() => undefined)}
-                >
-                  <PlayIcon />
-                  <span className="sr-only">Replay response</span>
-                </button>
+                <div className="message-actions">
+                  <button type="button" className="replay"
+                    onClick={() => void playResponse(message.text, message.responseId).catch(() => undefined)}>
+                    <PlayIcon />
+                    <span className="sr-only">Replay response</span>
+                  </button>
+                  {keyboardReady && <button type="button" className="replay"
+                    aria-label="Type response on keyboard"
+                    disabled={keyboardSending || !canType(message.text)}
+                    onClick={() => void sendKeyboard(message.text)}>Type</button>}
+                </div>
               )}
               {message.specialist && (
                 <details className="activity">
@@ -227,7 +273,24 @@ export function App() {
         <div ref={endRef} />
       </section>
 
-      <section className="transport" aria-label="Voice controls">
+      <section className="transport" aria-label="Controls">
+        <form className="keyboard-panel" onSubmit={(event) => {
+          event.preventDefault();
+          if (canType(keyboardText) && keyboardReady && !keyboardSending) void sendKeyboard(keyboardText);
+        }}>
+          <label htmlFor="keyboard-text">Keyboard</label>
+          <div className="keyboard-row">
+            <textarea id="keyboard-text" value={keyboardText} maxLength={4096} rows={1}
+              onChange={(event) => setKeyboardText(event.target.value)}
+              placeholder="Text to type" />
+            <button type="submit" className="quiet-button quiet-button--strong"
+              disabled={!keyboardReady || !canType(keyboardText) || keyboardSending}>Type on keyboard</button>
+          </div>
+          <div className="keyboard-meta">
+            <span className="keyboard-status" role="status">{!canType(keyboardText) && keyboardText ? "ASCII only · 4096 max" : keyboardStatus || (keyboardReady ? "Connected" : "Keyboard unavailable")}</span>
+            {!keyboardReady && <button type="button" className="keyboard-retry" onClick={() => void refreshKeyboard()}>Reconnect</button>}
+          </div>
+        </form>
         {pendingInput?.kind === "approval" && (
           <section className="input-card" aria-labelledby="approval-title">
             <h2 id="approval-title">Approval</h2>

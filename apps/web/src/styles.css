@@ -183,6 +183,11 @@ summary:focus-visible {
   fill: currentColor;
 }
 
+.message-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .activity {
   margin-top: 0.6rem;
   font-size: 0.8125rem;
@@ -217,6 +222,59 @@ summary:focus-visible {
   padding: 0.5rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--hairline);
   background: var(--void);
+}
+
+.keyboard-panel {
+  margin-bottom: 0.75rem;
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+
+.keyboard-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.keyboard-row textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.6rem;
+  border: 1px solid var(--outline);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  resize: vertical;
+}
+
+.keyboard-row button {
+  flex-shrink: 0;
+}
+
+.keyboard-row button:disabled,
+.message-actions button:disabled {
+  opacity: 0.4;
+}
+
+.keyboard-status {
+  min-height: 1em;
+}
+
+.keyboard-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.keyboard-retry {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .secondary-actions {
